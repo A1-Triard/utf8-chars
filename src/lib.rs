@@ -138,5 +138,12 @@ pub mod utf_chars {
             let mut bytes: &mut dyn Read = &mut "ABcd АБвгд UV".as_bytes();
             assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.utf8_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
         }
+
+        #[test]
+        fn do_not_take_extra_bytes() {
+            let mut bytes: &mut dyn Read = &mut "ABcd АБвгд UV".as_bytes();
+            assert_eq!(vec!['A', 'B', 'c', 'd'], bytes.utf8_chars().take(4).map(|x| x.unwrap()).collect::<Vec<_>>());
+            assert_eq!(vec![' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.utf8_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+        }
     }
 }
