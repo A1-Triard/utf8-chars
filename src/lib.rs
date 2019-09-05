@@ -3,7 +3,7 @@
 extern crate utf8;
 extern crate arrayvec;
 
-pub mod utf8_chars {
+pub mod utf_chars {
     use std::{fmt};
     use std::error::{Error};
     use std::io::{self, Read};
@@ -13,7 +13,7 @@ pub mod utf8_chars {
     const BUFFER_SIZE: usize = 16;
 
     #[derive(Debug)]
-    pub struct Chars<'a, T: Read + ?Sized> {
+    pub struct Utf8Chars<'a, T: Read + ?Sized> {
         input: &'a mut T,
         byte_buffer: [u8; BUFFER_SIZE],
         byte_buffer_start: usize,
@@ -46,7 +46,7 @@ pub mod utf8_chars {
             Ok(())
         }
     }
-    impl<'a, T: Read> Iterator for Chars<'a, T> {
+    impl<'a, T: Read> Iterator for Utf8Chars<'a, T> {
         type Item = io::Result<char>;
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -104,11 +104,11 @@ pub mod utf8_chars {
         }
     }
     pub trait ReadChars : Read {
-        fn chars<'a>(&'a mut self) -> Chars<'a, Self>;
+        fn utf8_chars<'a>(&'a mut self) -> Utf8Chars<'a, Self>;
     }
     impl<T: Read> ReadChars for T {
-        fn chars<'a>(&'a mut self) -> Chars<'a, Self> {
-            Chars {
+        fn utf8_chars<'a>(&'a mut self) -> Utf8Chars<'a, Self> {
+            Utf8Chars {
                 input: self,
                 byte_buffer: [0; BUFFER_SIZE],
                 byte_buffer_start: 0,
@@ -126,13 +126,17 @@ pub mod utf8_chars {
     mod tests {
         use std::io::{Read};
         use std::vec::{Vec};
-        use crate::utf8_chars::{ReadChars};
+        use crate::utf_chars::{ReadChars};
 
         #[test]
-        fn it_works() {
-            assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], "ABcd АБвгд UV".as_bytes().chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+        fn read_valid_unicode() {
+            assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], "ABcd АБвгд UV".as_bytes().utf8_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+        }
+
+        #[test]
+        fn read_valid_unicode_from_dyn_read() {
             let mut bytes: &mut dyn Read = &mut "ABcd АБвгд UV".as_bytes();
-            assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+            assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.utf8_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
         }
     }
 }
