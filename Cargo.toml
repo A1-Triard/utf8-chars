@@ -2,6 +2,11 @@
 name = "utf8-chars"
 version = "0.1.0"
 authors = ["warlock <internalmike@gmail.com>"]
+description = "Char-per-char iterator for any bytes source (BufRead trait)."
+documentation = "https://docs.rs/utf8-chars/"
+keywords = ["utf-8", "utf8", "chars", "iterator"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/A1-Triard/utf8-chars"
 
 [dependencies]
 arrayvec = "0.4.11"
