@@ -101,7 +101,7 @@ impl<T: BufRead> ReadChars for T {
 mod tests {
     use std::io::{BufRead, BufReader};
     use std::vec::{Vec};
-    use crate::utf_chars::{ReadChars};
+    use crate::{ReadChars};
 
     #[test]
     fn read_valid_unicode() {
