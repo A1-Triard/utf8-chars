@@ -1,149 +1,124 @@
-#![feature(ptr_offset_from)]
 #![allow(non_shorthand_field_patterns)]
-extern crate utf8;
 extern crate arrayvec;
 
 pub mod utf_chars {
     use std::{fmt};
-    use std::error::{Error};
-    use std::io::{self, Read};
-    use std::mem::{replace};
+    use std::char::{self};
+    use std::io::{self, BufRead};
     use arrayvec::{ArrayVec};
 
-    const BUFFER_SIZE: usize = 16;
-
     #[derive(Debug)]
-    pub struct Utf8Chars<'a, T: Read + ?Sized> {
-        input: &'a mut T,
-        byte_buffer: [u8; BUFFER_SIZE],
-        byte_buffer_start: usize,
-        byte_buffer_end: usize,
-        incomplete_sequence_buffer: utf8::Incomplete,
-        char_buffer: [char; BUFFER_SIZE],
-        char_buffer_start: usize,
-        char_buffer_end: usize,
-        invalid_sequence_buffer: ArrayVec<[u8; 6]>,
-    }
+    pub struct Utf8Chars<'a, T: BufRead + ?Sized>(&'a mut T);
     #[derive(Debug)]
-    pub struct CharsError {
-        bytes: ArrayVec<[u8; 6]>,
+    pub struct Utf8CharsError(ArrayVec<[u8; UTF8_SEQUENCE_MAX_LENGTH as usize]>);
+    impl Utf8CharsError {
+        pub fn as_bytes(&self) -> &[u8] { &self.0 }
+        pub fn into_bytes(self) -> ArrayVec<[u8; UTF8_SEQUENCE_MAX_LENGTH as usize]> { self.0 }
     }
-    impl CharsError {
-        pub fn as_bytes(&self) -> &[u8] { &self.bytes }
-        pub fn into_bytes(self) -> ArrayVec<[u8; 6]> { self.bytes }
-    }
-    impl Error for CharsError {
-        fn description(&self) -> &str {
-            "invalid utf-8 byte sequence"
-        }
-    }
-    impl fmt::Display for CharsError {
+    impl fmt::Display for Utf8CharsError {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "invalid utf-8 byte sequence")?;
-            for b in &self.bytes {
+            write!(f, "invalid UTF-8 byte sequence")?;
+            for b in &self.0 {
                 write!(f, " {:02X}", b)?;
             }
             Ok(())
         }
     }
-    impl<'a, T: Read> Iterator for Utf8Chars<'a, T> {
-        type Item = io::Result<char>;
+    
+    const UTF8_SEQUENCE_MAX_LENGTH: u8 = 4;
+    const LEADING_BYTE_MASK: [u8; UTF8_SEQUENCE_MAX_LENGTH as usize] = [0x80, 0xE0, 0xF0, 0xF8];
+    const LEADING_BYTE_PATTERN: [u8; UTF8_SEQUENCE_MAX_LENGTH as usize] = [0x00, 0xC0, 0xE0, 0xF0];
+    const TAIL_BYTE_MASK: u8 = 0xC0;
+    const TAIL_BYTE_PATTERN: u8 = 0x80;
+    const TAIL_BYTE_VALUE_BITS: u8 = 6;
+    fn to_utf8(item: u32, expected_tail_bytes_count: u8, actual_tail_bytes_count: u8) -> ArrayVec<[u8; UTF8_SEQUENCE_MAX_LENGTH as usize]> {
+        let mut res = ArrayVec::new();
+        let leading_byte = LEADING_BYTE_PATTERN[expected_tail_bytes_count as usize] |
+                            ((item >> (TAIL_BYTE_VALUE_BITS * expected_tail_bytes_count)) as u8) & !LEADING_BYTE_MASK[expected_tail_bytes_count as usize];
+        res.push(leading_byte);
+        for tail_byte_index in 0..actual_tail_bytes_count {
+            res.push(TAIL_BYTE_PATTERN | ((item >> ((expected_tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS)) as u8) & !TAIL_BYTE_MASK);
+        }
+        res
+    }
+    impl<'a, T: BufRead> Iterator for Utf8Chars<'a, T> {
+        type Item = Result<char, (Utf8CharsError, Option<io::Error>)>;
 
         fn next(&mut self) -> Option<Self::Item> {
-            loop {
-                if self.char_buffer_start < self.char_buffer_end {
-                    let item = self.char_buffer[self.char_buffer_start];
-                    self.char_buffer_start += 1;
-                    return Some(Ok(item));
-                }
-                if !self.invalid_sequence_buffer.is_empty() {
-                    return Some(Err(io::Error::new(io::ErrorKind::InvalidData, CharsError { bytes: replace(&mut self.invalid_sequence_buffer, ArrayVec::new()) })));
-                }
-                if self.byte_buffer_start >= self.byte_buffer_end {
-                    match self.input.read(&mut self.byte_buffer) {
-                        Err(e) => return Some(Err(e)),
-                        Ok(readed) => {
-                            self.byte_buffer_start = 0;
-                            self.byte_buffer_end = readed;
+            match self.0.fill_buf() {
+                Err(e) => return Some(Err((Utf8CharsError(ArrayVec::new()), Some(e)))),
+                Ok(buf) => {
+                    if buf.is_empty() { return None; }
+                    let leading_byte = buf[0];
+                    self.0.consume(1);
+                    let tail_bytes_count = 'r: loop {
+                        for i in 0..UTF8_SEQUENCE_MAX_LENGTH {
+                            if leading_byte & LEADING_BYTE_MASK[i as usize] == LEADING_BYTE_PATTERN[i as usize] { break 'r i; }
+                        }
+                        let mut bytes = ArrayVec::new();
+                        bytes.push(leading_byte);
+                        return Some(Err((Utf8CharsError(bytes), None)));
+                    };
+                    let mut item = ((leading_byte & !LEADING_BYTE_MASK[tail_bytes_count as usize]) as u32) << (TAIL_BYTE_VALUE_BITS * tail_bytes_count);
+                    for tail_byte_index in 0..tail_bytes_count {
+                        match self.0.fill_buf() {
+                            Err(e) => return Some(Err((Utf8CharsError(to_utf8(item, tail_bytes_count, tail_byte_index)), Some(e)))),
+                            Ok(buf) => {
+                                if buf.is_empty() || buf[0] & TAIL_BYTE_MASK != TAIL_BYTE_PATTERN {
+                                    return Some(Err((Utf8CharsError(to_utf8(item, tail_bytes_count, tail_byte_index)), None)));
+                                }
+                                item |= ((buf[0] & !TAIL_BYTE_MASK) as u32) << ((tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS);
+                                self.0.consume(1);
+                            }
                         }
                     }
-                    if self.byte_buffer_end == 0 {
-                        if self.incomplete_sequence_buffer.is_empty() { return None; }
-                        let incomplete_sequence = self.incomplete_sequence_buffer.try_complete(&[0_u8]).unwrap().0.err().unwrap();
-                        return Some(Err(io::Error::new(io::ErrorKind::InvalidData, CharsError { bytes: incomplete_sequence.iter().map(|x| *x).collect() })));
+                    match char::from_u32(item) {
+                        None => Some(Err((Utf8CharsError(to_utf8(item, tail_bytes_count, tail_bytes_count)), None))),
+                        Some(item) => Some(Ok(item))
                     }
                 }
-                let (chars, invalid_sequence, remaining_input) = if self.incomplete_sequence_buffer.is_empty() {
-                    match utf8::decode(&self.byte_buffer[self.byte_buffer_start .. self.byte_buffer_end]) {
-                        Ok(chars) => (chars, &[][..], &self.byte_buffer[self.byte_buffer_end .. self.byte_buffer_end]),
-                        Err(utf8::DecodeError::Incomplete { valid_prefix: chars, incomplete_suffix: incomplete_suffix }) => {
-                            self.incomplete_sequence_buffer = incomplete_suffix;
-                            (chars, &[][..], &self.byte_buffer[self.byte_buffer_end .. self.byte_buffer_end])
-                        },
-                        Err(utf8::DecodeError::Invalid { valid_prefix: chars, invalid_sequence: invalid_sequence, remaining_input: remaining_input }) => {
-                            (chars, invalid_sequence, remaining_input)
-                        }
-                    }
-                } else {
-                    match self.incomplete_sequence_buffer.try_complete(&self.byte_buffer[self.byte_buffer_start .. self.byte_buffer_end]) {
-                        None => ("", &[][..], &self.byte_buffer[self.byte_buffer_end .. self.byte_buffer_end]),
-                        Some((Err(invalid_sequence), remaining_input)) => ("", invalid_sequence, remaining_input),
-                        Some((Ok(chars), remaining_input)) => (chars, &[][..], remaining_input)
-                    }
-                };
-                self.byte_buffer_start = unsafe { remaining_input.as_ptr().offset_from(self.byte_buffer.as_ptr()) as usize };
-                let chars = chars.chars();
-                self.char_buffer_start = 0;
-                self.char_buffer_end = 0;
-                for (buf, ch) in self.char_buffer.iter_mut().zip(chars) {
-                    *buf = ch;
-                    self.char_buffer_end += 1;
-                }
-                self.invalid_sequence_buffer = invalid_sequence.iter().map(|x| *x).collect();
             }
         }
     }
-    pub trait ReadChars : Read {
+    pub trait ReadChars : BufRead {
         fn utf8_chars<'a>(&'a mut self) -> Utf8Chars<'a, Self>;
     }
-    impl<T: Read> ReadChars for T {
-        fn utf8_chars<'a>(&'a mut self) -> Utf8Chars<'a, Self> {
-            Utf8Chars {
-                input: self,
-                byte_buffer: [0; BUFFER_SIZE],
-                byte_buffer_start: 0,
-                byte_buffer_end: 0,
-                incomplete_sequence_buffer: utf8::Incomplete::empty(),
-                char_buffer: ['\0'; BUFFER_SIZE],
-                char_buffer_start: 0,
-                char_buffer_end: 0,
-                invalid_sequence_buffer: ArrayVec::new(),
-            }
-        }
+    impl<T: BufRead> ReadChars for T {
+        fn utf8_chars<'a>(&'a mut self) -> Utf8Chars<'a, Self> { Utf8Chars(self) }
     }
 
     #[cfg(test)]
     mod tests {
-        use std::io::{Read};
+        use std::io::{BufRead, BufReader};
         use std::vec::{Vec};
         use crate::utf_chars::{ReadChars};
 
         #[test]
         fn read_valid_unicode() {
-            assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], "ABcd АБвгд UV".as_bytes().utf8_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+            assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'],
+                        BufReader::new("ABcd АБвгд UV".as_bytes()).utf8_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
         }
 
         #[test]
         fn read_valid_unicode_from_dyn_read() {
-            let mut bytes: &mut dyn Read = &mut "ABcd АБвгд UV".as_bytes();
+            let mut bytes: &mut dyn BufRead = &mut BufReader::new("ABcd АБвгд UV".as_bytes());
             assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.utf8_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
         }
 
         #[test]
         fn do_not_take_extra_bytes() {
-            let mut bytes: &mut dyn Read = &mut "ABcd АБвгд UV".as_bytes();
+            let mut bytes = BufReader::new("ABcd АБвгд UV".as_bytes());
             assert_eq!(vec!['A', 'B', 'c', 'd'], bytes.utf8_chars().take(4).map(|x| x.unwrap()).collect::<Vec<_>>());
             assert_eq!(vec![' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.utf8_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+        }
+
+        #[test]
+        fn read_value_out_of_range() {
+            let mut bytes = BufReader::new(&[ 0xF5, 0x8F, 0xBF, 0xBF ][..]);
+            let res = bytes.utf8_chars().collect::<Vec<_>>();
+            assert_eq!(1, res.len());
+            let err = res[0].as_ref().err().unwrap();
+            assert_eq!(&[0xF5, 0x8F, 0xBF, 0xBF][..], err.0.as_bytes());
         }
     }
 }

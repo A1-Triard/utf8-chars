@@ -5,4 +5,3 @@ authors = ["warlock <internalmike@gmail.com>"]
 
 [dependencies]
 arrayvec = "0.4.11"
-utf-8 = "0.7.5"
