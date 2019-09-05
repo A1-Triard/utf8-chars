@@ -10,6 +10,3 @@ repository = "https://github.com/A1-Triard/utf8-chars"
 
 [dependencies]
 arrayvec = "0.4.11"
-
-[features]
-docs-rs = []

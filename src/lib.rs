@@ -7,8 +7,13 @@ pub mod utf_chars {
     use std::io::{self, BufRead};
     use arrayvec::{ArrayVec};
 
+    /// An iterator over the chars of an instance of `BufRead` containing UTF-8 encoded text.
+    ///
+    /// This struct is generally created by calling `utf8_chars` on a `BufRead`.
     #[derive(Debug)]
     pub struct Utf8Chars<'a, T: BufRead + ?Sized>(&'a mut T);
+    
+    /// A byte sequence, representing an invalid or incomplete UTF-8 char.
     #[derive(Debug)]
     pub struct Utf8CharsError(ArrayVec<[u8; UTF8_SEQUENCE_MAX_LENGTH as usize]>);
     impl Utf8CharsError {
@@ -80,7 +85,13 @@ pub mod utf_chars {
             }
         }
     }
+    /// An extension trait, allowing char-per-char read from `BufRead`.
     pub trait ReadChars : BufRead {
+        /// Returns an iterator over the chars of this reader containing UTF-8 encoded text.
+        ///
+        /// The iterator returned from this function will yield instances of `Result<char, (Utf8CharsError, Option<io::Error>)>`.
+        /// The `Err` variant contains invalid ot incomplete char with optional I/O error.
+        /// An `Utf8CharsError` can contains empty byte sequence if I/O error occurs when read a leading byte.
         fn utf8_chars<'a>(&'a mut self) -> Utf8Chars<'a, Self>;
     }
     impl<T: BufRead> ReadChars for T {
