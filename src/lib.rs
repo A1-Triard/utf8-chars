@@ -136,6 +136,15 @@ mod tests {
     }
 
     #[test]
+    fn read_surrogate() {
+        let mut bytes = BufReader::new(&[ 0xED, 0xA0, 0x80 ][..]);
+        let res = bytes.utf8_chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(&[0xED, 0xA0, 0x80][..], err.0.as_bytes());
+    }
+
+    #[test]
     fn read_invalid_sequences() {
         let mut bytes = BufReader::new(&[ 0x81, 0x82, 0xC1, 0x07, 0xC1, 0x87, 0xC2, 0xC2, 0x82, 0xF7, 0x88, 0x89, 0x07 ][..]);
         let res = bytes.utf8_chars().collect::<Vec<_>>();
