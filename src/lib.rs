@@ -30,18 +30,18 @@ impl fmt::Display for Utf8InvalidSequence {
 }
 
 const UTF8_SEQUENCE_MAX_LENGTH: u8 = 4;
-const LEADING_BYTE_MASK: [u8; UTF8_SEQUENCE_MAX_LENGTH as usize] = [0x80, 0xE0, 0xF0, 0xF8];
-const LEADING_BYTE_PATTERN: [u8; UTF8_SEQUENCE_MAX_LENGTH as usize] = [0x00, 0xC0, 0xE0, 0xF0];
-const TAIL_BYTE_MASK: u8 = 0xC0;
-const TAIL_BYTE_PATTERN: u8 = 0x80;
-const TAIL_BYTE_VALUE_BITS: u8 = 6;
+const UTF8_LEAD_BYTE_MASK: [u8; UTF8_SEQUENCE_MAX_LENGTH as usize] = [0x80, 0xE0, 0xF0, 0xF8];
+const UTF8_LEAD_BYTE_PATTERN: [u8; UTF8_SEQUENCE_MAX_LENGTH as usize] = [0x00, 0xC0, 0xE0, 0xF0];
+const UTF8_TAIL_BYTE_MASK: u8 = 0xC0;
+const UTF8_TAIL_BYTE_PATTERN: u8 = 0x80;
+const UTF8_TAIL_BYTE_VALUE_BITS: u8 = 6;
 fn to_utf8(item: u32, expected_tail_bytes_count: u8, actual_tail_bytes_count: u8) -> ArrayVec<[u8; UTF8_SEQUENCE_MAX_LENGTH as usize]> {
     let mut res = ArrayVec::new();
-    let leading_byte = LEADING_BYTE_PATTERN[expected_tail_bytes_count as usize] |
-                        ((item >> (TAIL_BYTE_VALUE_BITS * expected_tail_bytes_count)) as u8) & !LEADING_BYTE_MASK[expected_tail_bytes_count as usize];
-    res.push(leading_byte);
+    let lead_byte = UTF8_LEAD_BYTE_PATTERN[expected_tail_bytes_count as usize] |
+                        ((item >> (UTF8_TAIL_BYTE_VALUE_BITS * expected_tail_bytes_count)) as u8) & !UTF8_LEAD_BYTE_MASK[expected_tail_bytes_count as usize];
+    res.push(lead_byte);
     for tail_byte_index in 0..actual_tail_bytes_count {
-        res.push(TAIL_BYTE_PATTERN | ((item >> ((expected_tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS)) as u8) & !TAIL_BYTE_MASK);
+        res.push(UTF8_TAIL_BYTE_PATTERN | ((item >> ((expected_tail_bytes_count - 1 - tail_byte_index) * UTF8_TAIL_BYTE_VALUE_BITS)) as u8) & !UTF8_TAIL_BYTE_MASK);
     }
     res
 }
@@ -53,25 +53,25 @@ impl<'a, T: BufRead> Iterator for Utf8Chars<'a, T> {
             Err(e) => return Some(Err((Utf8InvalidSequence(ArrayVec::new()), Some(e)))),
             Ok(buf) => {
                 if buf.is_empty() { return None; }
-                let leading_byte = buf[0];
+                let lead_byte = buf[0];
                 self.0.consume(1);
                 let tail_bytes_count = 'r: loop {
                     for i in 0..UTF8_SEQUENCE_MAX_LENGTH {
-                        if leading_byte & LEADING_BYTE_MASK[i as usize] == LEADING_BYTE_PATTERN[i as usize] { break 'r i; }
+                        if lead_byte & UTF8_LEAD_BYTE_MASK[i as usize] == UTF8_LEAD_BYTE_PATTERN[i as usize] { break 'r i; }
                     }
                     let mut bytes = ArrayVec::new();
-                    bytes.push(leading_byte);
+                    bytes.push(lead_byte);
                     return Some(Err((Utf8InvalidSequence(bytes), None)));
                 };
-                let mut item = ((leading_byte & !LEADING_BYTE_MASK[tail_bytes_count as usize]) as u32) << (TAIL_BYTE_VALUE_BITS * tail_bytes_count);
+                let mut item = ((lead_byte & !UTF8_LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32) << (UTF8_TAIL_BYTE_VALUE_BITS * tail_bytes_count);
                 for tail_byte_index in 0..tail_bytes_count {
                     match self.0.fill_buf() {
                         Err(e) => return Some(Err((Utf8InvalidSequence(to_utf8(item, tail_bytes_count, tail_byte_index)), Some(e)))),
                         Ok(buf) => {
-                            if buf.is_empty() || buf[0] & TAIL_BYTE_MASK != TAIL_BYTE_PATTERN {
+                            if buf.is_empty() || buf[0] & UTF8_TAIL_BYTE_MASK != UTF8_TAIL_BYTE_PATTERN {
                                 return Some(Err((Utf8InvalidSequence(to_utf8(item, tail_bytes_count, tail_byte_index)), None)));
                             }
-                            item |= ((buf[0] & !TAIL_BYTE_MASK) as u32) << ((tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS);
+                            item |= ((buf[0] & !UTF8_TAIL_BYTE_MASK) as u32) << ((tail_bytes_count - 1 - tail_byte_index) * UTF8_TAIL_BYTE_VALUE_BITS);
                             self.0.consume(1);
                         }
                     }
@@ -90,7 +90,7 @@ pub trait ReadChars : BufRead {
     ///
     /// The iterator returned from this function will yield instances of `Result<char, (Utf8InvalidSequence, Option<io::Error>)>`.
     /// The `Err` variant contains an invalid ot incomplete char with an optional I/O error.
-    /// The `Utf8InvalidSequence` can contain an empty byte sequence if an I/O error occurs when read a leading byte.
+    /// The `Utf8InvalidSequence` can contain an empty byte sequence if an I/O error occurs when read a lead byte.
     fn utf8_chars<'a>(&'a mut self) -> Utf8Chars<'a, Self>;
 }
 impl<T: BufRead> ReadChars for T {

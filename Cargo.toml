@@ -1,6 +1,6 @@
 [package]
 name = "utf8-chars"
-version = "0.0.5"
+version = "0.0.6"
 authors = ["warlock <internalmike@gmail.com>"]
 description = "Char-per-char iterator for any bytes source (BufRead trait)."
 documentation = "https://docs.rs/utf8-chars/"
