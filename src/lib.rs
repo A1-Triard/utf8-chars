@@ -35,7 +35,7 @@ const UTF8_LEAD_BYTE_PATTERN: [u8; UTF8_SEQUENCE_MAX_LENGTH as usize] = [0x00, 0
 const UTF8_TAIL_BYTE_MASK: u8 = 0xC0;
 const UTF8_TAIL_BYTE_PATTERN: u8 = 0x80;
 const UTF8_TAIL_BYTE_VALUE_BITS: u8 = 6;
-const UTF8_NONZERO_BITS_MASK: [u32; UTF8_SEQUENCE_MAX_LENGTH as usize] = [0, 0x0780, 0xF800, 0x01F00000];
+const UTF8_SEQUENCE_MIN_VALUE: [u32; UTF8_SEQUENCE_MAX_LENGTH as usize] = [0, 0x80, 0x800, 0x10000];
 fn to_utf8(item: u32, expected_tail_bytes_count: u8, actual_tail_bytes_count: u8) -> ArrayVec<[u8; UTF8_SEQUENCE_MAX_LENGTH as usize]> {
     let mut res = ArrayVec::new();
     let lead_byte = UTF8_LEAD_BYTE_PATTERN[expected_tail_bytes_count as usize] |
@@ -77,7 +77,7 @@ impl<'a, T: BufRead> Iterator for Utf8Chars<'a, T> {
                         }
                     }
                 }
-                if tail_bytes_count != 0 && item & UTF8_NONZERO_BITS_MASK[tail_bytes_count as usize] == 0 {
+                if item < UTF8_SEQUENCE_MIN_VALUE[tail_bytes_count as usize] {
                     return Some(Err((Utf8InvalidSequence(to_utf8(item, tail_bytes_count, tail_bytes_count)), None)));
                 }
                 match char::from_u32(item) {
