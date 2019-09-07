@@ -29,7 +29,7 @@ impl fmt::Display for InvalidChar {
     }
 }
 
-impl<'a, T: BufRead> Iterator for Chars<'a, T> {
+impl<'a, T: BufRead + ?Sized> Iterator for Chars<'a, T> {
     type Item = Result<char, (InvalidChar, Option<io::Error>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -60,7 +60,7 @@ fn to_utf8(item: u32, expected_tail_bytes_count: u8, actual_tail_bytes_count: u8
     res
 }
 
-fn fill_buf_and_ignore_interrupts(reader: &mut impl BufRead) -> io::Result<&[u8]> {
+fn fill_buf_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::Result<&[u8]> {
     let (buf_ptr, buf_len) = loop {
         match reader.fill_buf() {
             Ok(buf) => break (buf.as_ptr(), buf.len()),
@@ -93,10 +93,6 @@ pub trait BufReadCharsExt : BufRead {
     /// If this function encounters an error of the kind `io::ErrorKind::Interrupted` then the error is ignored and the operation will continue.
     ///
     /// The `InvalidChar` can contain an empty byte sequence if an I/O error occurs when read a lead byte.
-    fn read_char(&mut self) -> Result<Option<char>, (InvalidChar, Option<io::Error>)>;
-}
-
-impl<T: BufRead> BufReadCharsExt for T {
     fn read_char(&mut self) -> Result<Option<char>, (InvalidChar, Option<io::Error>)> {
         match fill_buf_and_ignore_interrupts(self) {
             Err(e) => return Err((InvalidChar(ArrayVec::new()), Some(e))),
@@ -140,6 +136,8 @@ impl<T: BufRead> BufReadCharsExt for T {
     }
 }
 
+impl<T: BufRead + ?Sized> BufReadCharsExt for T { }
+
 #[cfg(test)]
 mod tests {
     use std::io::{BufRead, BufReader};
@@ -154,7 +152,7 @@ mod tests {
 
     #[test]
     fn read_valid_unicode_from_dyn_read() {
-        let mut bytes: &mut dyn BufRead = &mut BufReader::new("ABcd АБвгд UV".as_bytes());
+        let bytes: &mut dyn BufRead = &mut BufReader::new("ABcd АБвгд UV".as_bytes());
         assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.chars().map(|x| x.unwrap()).collect::<Vec<_>>());
     }
 
