@@ -1,4 +1,3 @@
-#![feature(nll)]
 #![allow(non_shorthand_field_patterns)]
 extern crate arrayvec;
 
