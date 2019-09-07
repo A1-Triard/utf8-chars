@@ -88,7 +88,7 @@ pub trait BufReadCharsExt : BufRead {
     /// - `Ok(None)` if the stream has reached EOF before lead byte was readed,
     /// - `Err((invalid_char, None))` with non-empty `invalid_char` if an invalid UTF-8 bytes sequence readed,
     /// - `Err((incomplete_char, Some(e))` with non-empty `incomplete_char` and `e.kind() == io::ErrorKind::UnexpectedEof` if EOF occuried after some bytes readed,
-    /// - and `Err((readed_bytes, Some(io_error)))` if an I/O error with kind differs from `ErrorKind::Interrupted` occuried.
+    /// - and `Err((readed_bytes, Some(io_error)))` if an I/O error with kind differs from `io::ErrorKind::Interrupted` occuried.
     ///
     /// If this function encounters an error of the kind `io::ErrorKind::Interrupted` then the error is ignored and the operation will continue.
     ///
