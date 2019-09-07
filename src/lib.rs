@@ -51,8 +51,7 @@ const SEQUENCE_MIN_VALUE: [u32; SEQUENCE_MAX_LENGTH as usize] = [0, 0x80, 0x800,
 
 fn to_utf8(item: u32, expected_tail_bytes_count: u8, actual_tail_bytes_count: u8) -> ArrayVec<[u8; SEQUENCE_MAX_LENGTH as usize]> {
     let mut res = ArrayVec::new();
-    let lead_byte = LEAD_BYTE_PATTERN[expected_tail_bytes_count as usize] |
-                        ((item >> (TAIL_BYTE_VALUE_BITS * expected_tail_bytes_count)) as u8) & !LEAD_BYTE_MASK[expected_tail_bytes_count as usize];
+    let lead_byte = LEAD_BYTE_PATTERN[expected_tail_bytes_count as usize] | ((item >> (TAIL_BYTE_VALUE_BITS * expected_tail_bytes_count)) as u8);
     res.push(lead_byte);
     for tail_byte_index in 0..actual_tail_bytes_count {
         res.push(TAIL_BYTE_PATTERN | ((item >> ((expected_tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS)) as u8) & !TAIL_BYTE_MASK);
