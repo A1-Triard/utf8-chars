@@ -64,15 +64,15 @@ pub trait BufReadCharsExt : BufRead {
     ///
     /// The iterator returned from this function will yield instances of `Result<char, (InvalidChar, Option<io::Error>)>`.
     ///
-    /// See `read_char` function for a description of the error.
+    /// See `read_char` function for a description of possible `Err`s.
     fn chars<'a>(&'a mut self) -> Chars<'a, Self> { Chars(self) }
     
     /// Reads a char from the underlying reader. Returns
     /// - `Ok(Some(char))` if a char is succesfully readed,
     /// - `Ok(None)` if the stream has reached EOF before lead byte was readed,
-    /// - `Error((invalid_char, None))` with non-empty `invalid_char` if an invalid UTF-8 bytes sequence readed,
-    /// - `Error((incomplete_char, Some(e)` with non-empty `incomplete_char` and `e.kind() == io::ErrorKind::UnexpectedEof` if EOF occuried after some bytes readed,
-    /// - and `Error((readed_bytes, Some(io_error)))` if an I/O error with kind differs from `ErrorKind::Interrupted` occuried.
+    /// - `Err((invalid_char, None))` with non-empty `invalid_char` if an invalid UTF-8 bytes sequence readed,
+    /// - `Err((incomplete_char, Some(e))` with non-empty `incomplete_char` and `e.kind() == io::ErrorKind::UnexpectedEof` if EOF occuried after some bytes readed,
+    /// - and `Err((readed_bytes, Some(io_error)))` if an I/O error with kind differs from `ErrorKind::Interrupted` occuried.
     ///
     /// If this function encounters an error of the kind `ErrorKind::Interrupted` then the error is ignored and the operation will continue.
     ///
