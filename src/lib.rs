@@ -50,56 +50,77 @@ impl<'a, T: BufRead> Iterator for Chars<'a, T> {
     type Item = Result<char, (InvalidChar, Option<io::Error>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.0.fill_buf() {
-            Err(e) => return Some(Err((InvalidChar(ArrayVec::new()), Some(e)))),
+        match self.0.read_char() {
+            Ok(Some(c)) => Some(Ok(c)),
+            Ok(None) => None,
+            Err(e) => Some(Err(e))
+        }
+    }
+}
+
+/// Extends [`BufRead`] with methods for reading chars.
+pub trait BufReadCharsExt : BufRead {
+    /// Returns an iterator over the chars of this reader.
+    ///
+    /// The iterator returned from this function will yield instances of `Result<char, (InvalidChar, Option<io::Error>)>`.
+    ///
+    /// See `read_char` function for a description of the error.
+    fn chars<'a>(&'a mut self) -> Chars<'a, Self> { Chars(self) }
+    
+    /// Reads a char from the underlying reader. Returns
+    /// - `Ok(Some(char))` if a char is succesfully readed,
+    /// - `Ok(None)` if the stream has reached EOF before lead byte was readed,
+    /// - `Error((invalid_char, None))` with non-empty `invalid_char` if an invalid UTF-8 bytes sequence readed,
+    /// - `Error((incomplete_char, Some(e)` with non-empty `incomplete_char` and `e.kind() == io::ErrorKind::UnexpectedEof` if EOF occuried after some bytes readed,
+    /// - and `Error((readed_bytes, Some(io_error)))` if an I/O error with kind differs from `ErrorKind::Interrupted` occuried.
+    ///
+    /// If this function encounters an error of the kind `ErrorKind::Interrupted` then the error is ignored and the operation will continue.
+    ///
+    /// The `InvalidChar` can contain an empty byte sequence if an I/O error occurs when read a lead byte.
+    fn read_char(&mut self) -> Result<Option<char>, (InvalidChar, Option<io::Error>)>;
+}
+impl<T: BufRead> BufReadCharsExt for T {
+    fn read_char(&mut self) -> Result<Option<char>, (InvalidChar, Option<io::Error>)> {
+        match self.fill_buf() {
+            Err(e) => return Err((InvalidChar(ArrayVec::new()), Some(e))),
             Ok(buf) => {
-                if buf.is_empty() { return None; }
+                if buf.is_empty() { return Ok(None); }
                 let lead_byte = buf[0];
-                self.0.consume(1);
+                self.consume(1);
                 let tail_bytes_count = 'r: loop {
                     for i in 0..SEQUENCE_MAX_LENGTH {
                         if lead_byte & LEAD_BYTE_MASK[i as usize] == LEAD_BYTE_PATTERN[i as usize] { break 'r i; }
                     }
                     let mut bytes = ArrayVec::new();
                     bytes.push(lead_byte);
-                    return Some(Err((InvalidChar(bytes), None)));
+                    return Err((InvalidChar(bytes), None));
                 };
                 let mut item = ((lead_byte & !LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32) << (TAIL_BYTE_VALUE_BITS * tail_bytes_count);
                 for tail_byte_index in 0..tail_bytes_count {
-                    match self.0.fill_buf() {
-                        Err(e) => return Some(Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_byte_index)), Some(e)))),
+                    match self.fill_buf() {
+                        Err(e) => return Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_byte_index)), Some(e))),
                         Ok(buf) => {
-                            if buf.is_empty() || buf[0] & TAIL_BYTE_MASK != TAIL_BYTE_PATTERN {
-                                return Some(Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_byte_index)), None)));
+                            if buf.is_empty() {
+                                return Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_byte_index)), Some(io::Error::new(io::ErrorKind::UnexpectedEof, "unexpected EOF"))));
+                            }
+                            if buf[0] & TAIL_BYTE_MASK != TAIL_BYTE_PATTERN {
+                                return Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_byte_index)), None));
                             }
                             item |= ((buf[0] & !TAIL_BYTE_MASK) as u32) << ((tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS);
-                            self.0.consume(1);
+                            self.consume(1);
                         }
                     }
                 }
                 if item < SEQUENCE_MIN_VALUE[tail_bytes_count as usize] {
-                    return Some(Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_bytes_count)), None)));
+                    return Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_bytes_count)), None));
                 }
                 match char::from_u32(item) {
-                    None => Some(Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_bytes_count)), None))),
-                    Some(item) => Some(Ok(item))
+                    None => Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_bytes_count)), None)),
+                    Some(item) => Ok(Some(item))
                 }
             }
         }
     }
-}
-/// Extends [`BufRead`] with methods for reading chars.
-pub trait BufReadCharsExt : BufRead {
-    /// Returns an iterator over the chars of this reader.
-    ///
-    /// The iterator returned from this function will yield instances of `Result<char, (InvalidChar, Option<io::Error>)>`.
-    /// The `Err` variant contains an invalid ot incomplete char with an optional I/O error.
-    ///
-    /// The `InvalidChar` can contain an empty byte sequence if an I/O error occurs when read a lead byte.
-    fn chars<'a>(&'a mut self) -> Chars<'a, Self>;
-}
-impl<T: BufRead> BufReadCharsExt for T {
-    fn chars<'a>(&'a mut self) -> Chars<'a, Self> { Chars(self) }
 }
 
 #[cfg(test)]
