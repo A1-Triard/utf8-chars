@@ -106,13 +106,11 @@ pub trait BufReadCharsExt : BufRead {
     /// Reads a char from the underlying reader.
     ///
     /// Returns
-    /// - `Ok(Some(char))` if a char is succesfully readed,
-    /// - `Ok(None)` if the stream has reached EOF before lead byte was readed,
-    /// - `Err(err)` with `err` containing readed bytes and an I/O error.
+    /// - `Ok(Some(char))` if a char has succesfully readed,
+    /// - `Ok(None)` if the stream has reached EOF before any byte was readed,
+    /// - `Err(err)` if an I/O error occuried, or readed byte sequence has not recognised as a valid UTF-8.
     ///
     /// If this function encounters an error of the kind `io::ErrorKind::Interrupted` then the error is ignored and the operation will continue.
-    ///
-    /// See `ReadCharError` for detailed error description.
     fn read_char(&mut self) -> Result<Option<char>, ReadCharError> {
         match fill_buf_and_ignore_interrupts(self) {
             Err(e) => return Err(ReadCharError { bytes: ArrayVec::new(), io_error: e }),
