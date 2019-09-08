@@ -7,7 +7,7 @@ use std::error::{Error};
 use std::io::{self, BufRead};
 use arrayvec::{ArrayVec};
 
-/// A structure, containing readed bytes of an invalid or incomplete UTF-8 char, and an I/O error.
+/// A structure, containing readed bytes, and an I/O error.
 /// The I/O error is an actual I/O error if some occuried,
 /// or a synthetic error with either the `UnexpectedEof` kind if a multi-byte char was unexpectedly terminated,
 /// either the `InvalidData` kind if no actual I/O error occuried, but readed byte sequence was not recognised as a valid UTF-8.  
@@ -20,9 +20,9 @@ pub struct ReadCharError {
 impl ReadCharError {
     /// A byte sequence, representing an invalid or incomplete UTF-8-encoded char.
     pub fn bytes(&self) -> &[u8] { &self.bytes }
-    /// Returns a reference to the original I/O error or to an error with `io::ErrorKind::InvalidData` or `io::ErrorKind::UnexpectedEof`.
+    /// Returns a reference to the I/O error
     pub fn io_error(&self) -> &io::Error { &self.io_error }
-    /// Consumes the `ReadCharError`, returning the original I/O error or an error with `io::ErrorKind::InvalidData` or `io::ErrorKind::UnexpectedEof`.
+    /// Consumes the `ReadCharError`, returning the I/O error
     pub fn into_io_error(self) -> io::Error { self.io_error }
 }
 
@@ -108,7 +108,7 @@ pub trait BufReadCharsExt : BufRead {
     /// Returns
     /// - `Ok(Some(char))` if a char has succesfully readed,
     /// - `Ok(None)` if the stream has reached EOF before any byte was readed,
-    /// - `Err(err)` if an I/O error occuried, or readed byte sequence has not recognised as a valid UTF-8.
+    /// - `Err(err)` if an I/O error occuried, or readed byte sequence was not recognised as a valid UTF-8.
     ///
     /// If this function encounters an error of the kind `io::ErrorKind::Interrupted` then the error is ignored and the operation will continue.
     fn read_char(&mut self) -> Result<Option<char>, ReadCharError> {
