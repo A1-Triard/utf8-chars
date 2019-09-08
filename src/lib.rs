@@ -3,8 +3,48 @@ extern crate arrayvec;
 
 use std::{fmt, slice};
 use std::char::{self};
+use std::error::{Error};
 use std::io::{self, BufRead};
 use arrayvec::{ArrayVec};
+
+/// A structure, containing readed bytes of an invalid or incomplete UTF-8 char, and an I/O error.
+/// The I/O error is an actual I/O error if some occuried,
+/// or a synthetic error with either the `UnexpectedEof` kind if a multi-byte char was unexpectedly terminated,
+/// either the `InvalidData` kind if no actual I/O error occuried, but readed byte sequence was not recognised as a valid UTF-8.  
+#[derive(Debug)]
+pub struct ReadCharError {
+    bytes: ArrayVec<[u8; SEQUENCE_MAX_LENGTH as usize]>,
+    io_error: io::Error,
+}
+
+impl ReadCharError {
+    /// A byte sequence, representing an invalid or incomplete UTF-8-encoded char.
+    pub fn bytes(&self) -> &[u8] { &self.bytes }
+    /// Returns a reference to the original I/O error or to an error with `io::ErrorKind::InvalidData` or `io::ErrorKind::UnexpectedEof`.
+    pub fn io_error(&self) -> &io::Error { &self.io_error }
+    /// Consumes the `ReadCharError`, returning the original I/O error or an error with `io::ErrorKind::InvalidData` or `io::ErrorKind::UnexpectedEof`.
+    pub fn into_io_error(self) -> io::Error { self.io_error }
+}
+
+impl Error for ReadCharError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> { Some(&self.io_error) }
+}
+
+impl fmt::Display for ReadCharError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid UTF-8 byte sequence")?;
+        for b in self.bytes() {
+            write!(f, " {:02X}", b)?;
+        }
+        write!(f, " readed")?;
+        match self.io_error().kind() {
+            io::ErrorKind::InvalidData => { },
+            io::ErrorKind::UnexpectedEof => { write!(f, " (unexpected EOF)")?; }
+            _ => { write!(f, " ({})", self.io_error())?; }
+        }
+        Ok(())
+    }
+}
 
 /// An iterator over the chars of an instance of `BufRead`.
 ///
@@ -12,25 +52,8 @@ use arrayvec::{ArrayVec};
 #[derive(Debug)]
 pub struct Chars<'a, T: BufRead + ?Sized>(&'a mut T);
 
-/// A byte sequence, representing an invalid or incomplete UTF-8-encoded char.
-#[derive(Debug)]
-pub struct InvalidChar(ArrayVec<[u8; SEQUENCE_MAX_LENGTH as usize]>);
-impl InvalidChar {
-    pub fn as_bytes(&self) -> &[u8] { &self.0 }
-    pub fn into_bytes(self) -> ArrayVec<[u8; SEQUENCE_MAX_LENGTH as usize]> { self.0 }
-}
-impl fmt::Display for InvalidChar {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid UTF-8 byte sequence")?;
-        for b in &self.0 {
-            write!(f, " {:02X}", b)?;
-        }
-        Ok(())
-    }
-}
-
 impl<'a, T: BufRead + ?Sized> Iterator for Chars<'a, T> {
-    type Item = Result<char, (InvalidChar, Option<io::Error>)>;
+    type Item = Result<char, ReadCharError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.0.read_char() {
@@ -77,24 +100,22 @@ fn fill_buf_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::R
 pub trait BufReadCharsExt : BufRead {
     /// Returns an iterator over the chars of this reader.
     ///
-    /// The iterator returned from this function will yield instances of `Result<char, (InvalidChar, Option<io::Error>)>`.
-    ///
-    /// See `read_char` function for a description of possible `Err`s.
+    /// The iterator returned from this function will yield instances of `Result<char, ReadCharError>`.
     fn chars(&mut self) -> Chars<Self> { Chars(self) }
 
-    /// Reads a char from the underlying reader. Returns
+    /// Reads a char from the underlying reader.
+    ///
+    /// Returns
     /// - `Ok(Some(char))` if a char is succesfully readed,
     /// - `Ok(None)` if the stream has reached EOF before lead byte was readed,
-    /// - `Err((invalid_char, None))` with non-empty `invalid_char` if an invalid UTF-8 bytes sequence readed,
-    /// - `Err((incomplete_char, Some(e))` with non-empty `incomplete_char` and `e.kind() == io::ErrorKind::UnexpectedEof` if EOF occuried after some bytes readed,
-    /// - and `Err((readed_bytes, Some(io_error)))` if an I/O error with kind differs from `io::ErrorKind::Interrupted` occuried.
+    /// - `Err(err)` with `err` containing readed bytes and an I/O error.
     ///
     /// If this function encounters an error of the kind `io::ErrorKind::Interrupted` then the error is ignored and the operation will continue.
     ///
-    /// The `InvalidChar` can contain an empty byte sequence if an I/O error occurs when read a lead byte.
-    fn read_char(&mut self) -> Result<Option<char>, (InvalidChar, Option<io::Error>)> {
+    /// See `ReadCharError` for detailed error description.
+    fn read_char(&mut self) -> Result<Option<char>, ReadCharError> {
         match fill_buf_and_ignore_interrupts(self) {
-            Err(e) => return Err((InvalidChar(ArrayVec::new()), Some(e))),
+            Err(e) => return Err(ReadCharError { bytes: ArrayVec::new(), io_error: e }),
             Ok(buf) => {
                 if buf.is_empty() { return Ok(None); }
                 let lead_byte = buf[0];
@@ -105,18 +126,18 @@ pub trait BufReadCharsExt : BufRead {
                     }
                     let mut bytes = ArrayVec::new();
                     bytes.push(lead_byte);
-                    return Err((InvalidChar(bytes), None));
+                    return Err(ReadCharError { bytes: bytes, io_error: io::Error::from(io::ErrorKind::InvalidData) });
                 };
                 let mut item = ((lead_byte & !LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32) << (TAIL_BYTE_VALUE_BITS * tail_bytes_count);
                 for tail_byte_index in 0..tail_bytes_count {
                     match fill_buf_and_ignore_interrupts(self) {
-                        Err(e) => return Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_byte_index)), Some(e))),
+                        Err(e) => return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_byte_index), io_error: e }),
                         Ok(buf) => {
                             if buf.is_empty() {
-                                return Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_byte_index)), Some(io::Error::new(io::ErrorKind::UnexpectedEof, "unexpected EOF"))));
+                                return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_byte_index), io_error: io::Error::from(io::ErrorKind::UnexpectedEof) });
                             }
                             if buf[0] & TAIL_BYTE_MASK != TAIL_BYTE_PATTERN {
-                                return Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_byte_index)), None));
+                                return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_byte_index), io_error: io::Error::from(io::ErrorKind::InvalidData) });
                             }
                             item |= ((buf[0] & !TAIL_BYTE_MASK) as u32) << ((tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS);
                             self.consume(1);
@@ -124,10 +145,10 @@ pub trait BufReadCharsExt : BufRead {
                     }
                 }
                 if item < SEQUENCE_MIN_VALUE[tail_bytes_count as usize] {
-                    return Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_bytes_count)), None));
+                    return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_bytes_count), io_error: io::Error::from(io::ErrorKind::InvalidData) });
                 }
                 match char::from_u32(item) {
-                    None => Err((InvalidChar(to_utf8(item, tail_bytes_count, tail_bytes_count)), None)),
+                    None => Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_bytes_count), io_error: io::Error::from(io::ErrorKind::InvalidData) }),
                     Some(item) => Ok(Some(item))
                 }
             }
@@ -168,7 +189,7 @@ mod tests {
         let res = bytes.chars().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
-        assert_eq!(&[0xF5, 0x8F, 0xBF, 0xBF][..], err.0.as_bytes());
+        assert_eq!(&[0xF5, 0x8F, 0xBF, 0xBF][..], err.bytes());
     }
 
     #[test]
@@ -177,7 +198,7 @@ mod tests {
         let res = bytes.chars().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
-        assert_eq!(&[0xED, 0xA0, 0x80][..], err.0.as_bytes());
+        assert_eq!(&[0xED, 0xA0, 0x80][..], err.bytes());
     }
 
     #[test]
@@ -185,14 +206,14 @@ mod tests {
         let mut bytes = BufReader::new(&[ 0x81, 0x82, 0xC1, 0x07, 0xC1, 0x87, 0xC2, 0xC2, 0x82, 0xF7, 0x88, 0x89, 0x07 ][..]);
         let res = bytes.chars().collect::<Vec<_>>();
         assert_eq!(9, res.len());
-        assert_eq!(&[0x81][..], res[0].as_ref().err().unwrap().0.as_bytes());
-        assert_eq!(&[0x82][..], res[1].as_ref().err().unwrap().0.as_bytes());
-        assert_eq!(&[0xC1][..], res[2].as_ref().err().unwrap().0.as_bytes());
+        assert_eq!(&[0x81][..], res[0].as_ref().err().unwrap().bytes());
+        assert_eq!(&[0x82][..], res[1].as_ref().err().unwrap().bytes());
+        assert_eq!(&[0xC1][..], res[2].as_ref().err().unwrap().bytes());
         assert_eq!('\x07', *res[3].as_ref().unwrap());
-        assert_eq!(&[0xC1, 0x87][..], res[4].as_ref().err().unwrap().0.as_bytes());
-        assert_eq!(&[0xC2][..], res[5].as_ref().err().unwrap().0.as_bytes());
+        assert_eq!(&[0xC1, 0x87][..], res[4].as_ref().err().unwrap().bytes());
+        assert_eq!(&[0xC2][..], res[5].as_ref().err().unwrap().bytes());
         assert_eq!('\u{82}', *res[6].as_ref().unwrap());
-        assert_eq!(&[0xF7, 0x88, 0x89][..], res[7].as_ref().err().unwrap().0.as_bytes());
+        assert_eq!(&[0xF7, 0x88, 0x89][..], res[7].as_ref().err().unwrap().bytes());
         assert_eq!('\x07', *res[8].as_ref().unwrap());
     }
 }
