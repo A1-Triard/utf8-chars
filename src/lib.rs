@@ -20,9 +20,9 @@ pub struct ReadCharError {
 impl ReadCharError {
     /// A byte sequence, representing an invalid or incomplete UTF-8-encoded char.
     pub fn bytes(&self) -> &[u8] { &self.bytes }
-    /// Returns a reference to the I/O error
+    /// Returns a reference to the I/O error.
     pub fn io_error(&self) -> &io::Error { &self.io_error }
-    /// Consumes the `ReadCharError`, returning the I/O error
+    /// Consumes the `ReadCharError`, returning the I/O error.
     pub fn into_io_error(self) -> io::Error { self.io_error }
 }
 
