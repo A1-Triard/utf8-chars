@@ -13,11 +13,11 @@ use std::error::{Error};
 use std::io::{self, BufRead};
 use arrayvec::{ArrayVec};
 
-/// A structure, containing readed bytes, and an [`io::Error`](https://doc.rust-lang.org/std/io/struct.Error.html).
+/// A structure, containing readed bytes, and an [`io::Error`](std::io::Error).
 /// The `io::Error` is an actual I/O error if some occuried,
-/// or a synthetic error with either the [`UnexpectedEof`](https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.UnexpectedEof)
+/// or a synthetic error with either the [`UnexpectedEof`](std::io::ErrorKind::UnexpectedEof)
 /// kind if a multi-byte char was unexpectedly terminated,
-/// either the [`InvalidData`](https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.InvalidData)
+/// either the [`InvalidData`](std::io::ErrorKind::InvalidData)
 /// kind if no actual I/O error occuried, but readed byte sequence was not recognised as a valid UTF-8.  
 #[derive(Debug)]
 pub struct ReadCharError {
@@ -56,8 +56,8 @@ impl fmt::Display for ReadCharError {
 
 /// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
 ///
-/// This struct is generally created by calling [`chars`](trait.BufReadCharsExt.html#method.chars)
-/// on a [`BufRead`](https://doc.rust-lang.org/std/io/trait.BufRead.html).
+/// This struct is generally created by calling [`chars`](BufReadCharsExt::chars)
+/// on a [`BufRead`](std::io::BufRead).
 #[derive(Debug)]
 pub struct Chars<'a, T: BufRead + ?Sized>(&'a mut T);
 
@@ -105,11 +105,11 @@ fn fill_buf_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::R
     Ok(unsafe { slice::from_raw_parts(buf_ptr, buf_len) })
 }
 
-/// Extends [`BufRead`] with methods for reading chars.
+/// Extends [`BufRead`](std::io::BufRead) with methods for reading chars.
 pub trait BufReadCharsExt : BufRead {
     /// Returns an iterator over the chars of this reader.
     ///
-    /// The iterator returned from this function will yield instances of [`Result`](https://doc.rust-lang.org/core/result/enum.Result.html)`<char, ReadCharError>`.
+    /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, ReadCharError>`.
     fn chars(&mut self) -> Chars<Self> { Chars(self) }
 
     /// Reads a char from the underlying reader.
@@ -119,7 +119,8 @@ pub trait BufReadCharsExt : BufRead {
     /// - `Ok(None)` if the stream has reached EOF before any byte was readed,
     /// - `Err(err)` if an I/O error occuried, or readed byte sequence was not recognised as a valid UTF-8.
     ///
-    /// If this function encounters an error of the kind `io::ErrorKind::Interrupted` then the error is ignored and the operation will continue.
+    /// If this function encounters an error of the kind [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
+    /// then the error is ignored and the operation will continue.
     fn read_char(&mut self) -> Result<Option<char>, ReadCharError> {
         match fill_buf_and_ignore_interrupts(self) {
             Err(e) => return Err(ReadCharError { bytes: ArrayVec::new(), io_error: e }),
