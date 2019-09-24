@@ -13,10 +13,12 @@ use std::error::{Error};
 use std::io::{self, BufRead};
 use arrayvec::{ArrayVec};
 
-/// A structure, containing readed bytes, and an I/O error.
-/// The I/O error is an actual I/O error if some occuried,
-/// or a synthetic error with either the `UnexpectedEof` kind if a multi-byte char was unexpectedly terminated,
-/// either the `InvalidData` kind if no actual I/O error occuried, but readed byte sequence was not recognised as a valid UTF-8.  
+/// A structure, containing readed bytes, and an [`io::Error`](https://doc.rust-lang.org/std/io/struct.Error.html).
+/// The `io::Error` is an actual I/O error if some occuried,
+/// or a synthetic error with either the [`UnexpectedEof`](https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.UnexpectedEof)
+/// kind if a multi-byte char was unexpectedly terminated,
+/// either the [`InvalidData`](https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.InvalidData)
+/// kind if no actual I/O error occuried, but readed byte sequence was not recognised as a valid UTF-8.  
 #[derive(Debug)]
 pub struct ReadCharError {
     bytes: ArrayVec<[u8; SEQUENCE_MAX_LENGTH as usize]>,
@@ -52,9 +54,10 @@ impl fmt::Display for ReadCharError {
     }
 }
 
-/// An iterator over the chars of an instance of `BufRead`.
+/// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
 ///
-/// This struct is generally created by calling `chars` on a `BufRead`.
+/// This struct is generally created by calling [`chars`](trait.BufReadCharsExt.html#method.chars)
+/// on a [`BufRead`](https://doc.rust-lang.org/std/io/trait.BufRead.html).
 #[derive(Debug)]
 pub struct Chars<'a, T: BufRead + ?Sized>(&'a mut T);
 
@@ -106,7 +109,7 @@ fn fill_buf_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::R
 pub trait BufReadCharsExt : BufRead {
     /// Returns an iterator over the chars of this reader.
     ///
-    /// The iterator returned from this function will yield instances of `Result<char, ReadCharError>`.
+    /// The iterator returned from this function will yield instances of [`Result`](https://doc.rust-lang.org/core/result/enum.Result.html)`<char, ReadCharError>`.
     fn chars(&mut self) -> Chars<Self> { Chars(self) }
 
     /// Reads a char from the underlying reader.
