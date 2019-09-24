@@ -1,4 +1,10 @@
 #![allow(non_shorthand_field_patterns)]
+#![cfg_attr(test, feature(result_map_or_else))]
+#[cfg(test)]
+extern crate quickcheck;
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
 extern crate arrayvec;
 
 use std::{fmt, slice};
@@ -19,9 +25,9 @@ pub struct ReadCharError {
 
 impl ReadCharError {
     /// A byte sequence, representing an invalid or incomplete UTF-8-encoded char.
-    pub fn bytes(&self) -> &[u8] { &self.bytes }
+    pub fn as_bytes(&self) -> &[u8] { &self.bytes }
     /// Returns a reference to the I/O error.
-    pub fn io_error(&self) -> &io::Error { &self.io_error }
+    pub fn as_io_error(&self) -> &io::Error { &self.io_error }
     /// Consumes the `ReadCharError`, returning the I/O error.
     pub fn into_io_error(self) -> io::Error { self.io_error }
 }
@@ -33,14 +39,14 @@ impl Error for ReadCharError {
 impl fmt::Display for ReadCharError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "invalid UTF-8 byte sequence")?;
-        for b in self.bytes() {
+        for b in self.as_bytes() {
             write!(f, " {:02X}", b)?;
         }
         write!(f, " readed")?;
-        match self.io_error().kind() {
+        match self.as_io_error().kind() {
             io::ErrorKind::InvalidData => { },
             io::ErrorKind::UnexpectedEof => { write!(f, " (unexpected EOF)")?; }
-            _ => { write!(f, " ({})", self.io_error())?; }
+            _ => { write!(f, " ({})", self.as_io_error())?; }
         }
         Ok(())
     }
@@ -187,7 +193,7 @@ mod tests {
         let res = bytes.chars().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
-        assert_eq!(&[0xF5, 0x8F, 0xBF, 0xBF][..], err.bytes());
+        assert_eq!(&[0xF5, 0x8F, 0xBF, 0xBF][..], err.as_bytes());
     }
 
     #[test]
@@ -196,7 +202,7 @@ mod tests {
         let res = bytes.chars().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
-        assert_eq!(&[0xED, 0xA0, 0x80][..], err.bytes());
+        assert_eq!(&[0xED, 0xA0, 0x80][..], err.as_bytes());
     }
 
     #[test]
@@ -204,14 +210,28 @@ mod tests {
         let mut bytes = BufReader::new(&[ 0x81, 0x82, 0xC1, 0x07, 0xC1, 0x87, 0xC2, 0xC2, 0x82, 0xF7, 0x88, 0x89, 0x07 ][..]);
         let res = bytes.chars().collect::<Vec<_>>();
         assert_eq!(9, res.len());
-        assert_eq!(&[0x81][..], res[0].as_ref().err().unwrap().bytes());
-        assert_eq!(&[0x82][..], res[1].as_ref().err().unwrap().bytes());
-        assert_eq!(&[0xC1][..], res[2].as_ref().err().unwrap().bytes());
+        assert_eq!(&[0x81][..], res[0].as_ref().err().unwrap().as_bytes());
+        assert_eq!(&[0x82][..], res[1].as_ref().err().unwrap().as_bytes());
+        assert_eq!(&[0xC1][..], res[2].as_ref().err().unwrap().as_bytes());
         assert_eq!('\x07', *res[3].as_ref().unwrap());
-        assert_eq!(&[0xC1, 0x87][..], res[4].as_ref().err().unwrap().bytes());
-        assert_eq!(&[0xC2][..], res[5].as_ref().err().unwrap().bytes());
+        assert_eq!(&[0xC1, 0x87][..], res[4].as_ref().err().unwrap().as_bytes());
+        assert_eq!(&[0xC2][..], res[5].as_ref().err().unwrap().as_bytes());
         assert_eq!('\u{82}', *res[6].as_ref().unwrap());
-        assert_eq!(&[0xF7, 0x88, 0x89][..], res[7].as_ref().err().unwrap().bytes());
+        assert_eq!(&[0xF7, 0x88, 0x89][..], res[7].as_ref().err().unwrap().as_bytes());
         assert_eq!('\x07', *res[8].as_ref().unwrap());
+    }
+
+    #[quickcheck]
+    fn read_string(s: String) -> bool {
+        let mut t = String::new();
+        BufReader::new(s.as_bytes()).chars().for_each(|c| t.push(c.unwrap()));
+        s == t
+    }
+
+    #[quickcheck]
+    fn read_array(b: Vec<u8>) -> bool {
+        let mut t = Vec::new();
+        BufReader::new(&b[..]).chars().for_each(|c| t.append(&mut c.map_or_else(|e| e.as_bytes().to_vec(), |s| s.to_string().as_bytes().to_vec())));
+        b == t
     }
 }
