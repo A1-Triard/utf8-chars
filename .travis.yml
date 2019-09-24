@@ -16,6 +16,4 @@ matrix:
     env: TEST=false
 script:
 - cargo build --verbose
-- if "$TEST"; then
--     cargo test --verbose
-- fi
+- if "$TEST"; then cargo test --verbose; fi
