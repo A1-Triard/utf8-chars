@@ -3,6 +3,19 @@ rust:
 - stable
 - beta
 - nightly
+env:
+- TEST=true
+- TEST=false
+matrix:
+  exclude:
+  - rust: stable
+    env: TEST=true
+  - rust: beta
+    env: TEST=true
+  - rust: nightly
+    env: TEST=false
 script:
 - cargo build --verbose
-- cargo test --verbose
+- if "$TEST"; then
+-     cargo test --verbose
+- fi
