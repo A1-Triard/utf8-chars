@@ -1,6 +1,6 @@
 [package]
 name = "utf8-chars"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["warlock <internalmike@gmail.com>"]
 description = "Char-per-char iterator and `read_char` method for `BufRead`."
 readme = "README.md"
@@ -10,7 +10,7 @@ license = "MIT/Apache-2.0"
 repository = "https://github.com/A1-Triard/utf8-chars"
 
 [dependencies]
-arrayvec = "0.4.11"
+arrayvec = "0.5.0"
 
 [dev-dependencies]
 quickcheck = "0.9.0"
