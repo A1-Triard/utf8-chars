@@ -65,11 +65,7 @@ impl<'a, T: BufRead + ?Sized> Iterator for Chars<'a, T> {
     type Item = Result<char, ReadCharError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.0.read_char() {
-            Ok(Some(c)) => Some(Ok(c)),
-            Ok(None) => None,
-            Err(e) => Some(Err(e))
-        }
+        self.0.read_char().transpose()
     }
 }
 
