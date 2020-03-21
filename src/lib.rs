@@ -12,12 +12,12 @@ use std::error::{Error};
 use std::io::{self, BufRead};
 use arrayvec::{ArrayVec};
 
-/// A structure, containing readed bytes, and an [`io::Error`](std::io::Error).
-/// The `io::Error` is an actual I/O error if some occuried,
+/// A structure, containing read bytes, and an [`io::Error`](std::io::Error).
+/// The `io::Error` is an actual I/O error if some occurred,
 /// or a synthetic error with either the [`UnexpectedEof`](std::io::ErrorKind::UnexpectedEof)
 /// kind if a multi-byte char was unexpectedly terminated,
 /// either the [`InvalidData`](std::io::ErrorKind::InvalidData)
-/// kind if no actual I/O error occuried, but readed byte sequence was not recognised as a valid UTF-8.  
+/// kind if no actual I/O error occurred, but read byte sequence was not recognised as a valid UTF-8.  
 #[derive(Debug)]
 pub struct ReadCharError {
     bytes: ArrayVec<[u8; SEQUENCE_MAX_LENGTH as usize]>,
@@ -43,7 +43,7 @@ impl fmt::Display for ReadCharError {
         for b in self.as_bytes() {
             write!(f, " {:02X}", b)?;
         }
-        write!(f, " readed")?;
+        write!(f, " read")?;
         match self.as_io_error().kind() {
             io::ErrorKind::InvalidData => { },
             io::ErrorKind::UnexpectedEof => { write!(f, " (unexpected EOF)")?; }
@@ -110,9 +110,9 @@ pub trait BufReadCharsExt : BufRead {
     /// Reads a char from the underlying reader.
     ///
     /// Returns
-    /// - `Ok(Some(char))` if a char has succesfully readed,
-    /// - `Ok(None)` if the stream has reached EOF before any byte was readed,
-    /// - `Err(err)` if an I/O error occuried, or readed byte sequence was not recognised as a valid UTF-8.
+    /// - `Ok(Some(char))` if a char has successfully read,
+    /// - `Ok(None)` if the stream has reached EOF before any byte was read,
+    /// - `Err(err)` if an I/O error occurred, or read byte sequence was not recognised as a valid UTF-8.
     ///
     /// If this function encounters an error of the kind [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
     /// then the error is ignored and the operation will continue.
