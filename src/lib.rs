@@ -1,4 +1,3 @@
-#![cfg_attr(test, feature(result_map_or_else))]
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
