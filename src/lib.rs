@@ -200,6 +200,99 @@ mod tests {
     }
 
     #[test]
+    fn edgecase_one_two_bytes() {
+        assert_eq!(vec!['\x7F'],
+                    BufReader::new(&[ 0x7F ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+        assert_eq!(vec!['\u{0080}'],
+                    BufReader::new(&[ 0xC2, 0x80 ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+
+        let mut bytes = BufReader::new(&[ 0xC2 ][..]);
+        let res = bytes.chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(&[0xC2][..], err.as_bytes());
+        assert_eq!(ErrorKind::UnexpectedEof, err.as_io_error().kind());
+
+        let mut bytes = BufReader::new(&[ 0xC1, 0xBF ][..]);
+        let res = bytes.chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(&[0xC1, 0xBF][..], err.as_bytes());
+        assert_eq!(ErrorKind::InvalidData, err.as_io_error().kind());
+    }
+
+    #[test]
+    fn edgecase_two_three_bytes() {
+        assert_eq!(vec!['\u{07FF}'],
+                    BufReader::new(&[ 0xDF, 0xBF ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+        assert_eq!(vec!['\u{0800}'],
+                    BufReader::new(&[ 0xE0, 0xA0, 0x80 ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+
+        let mut bytes = BufReader::new(&[ 0xE0, 0xA0 ][..]);
+        let res = bytes.chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(&[0xE0, 0xA0][..], err.as_bytes());
+        assert_eq!(ErrorKind::UnexpectedEof, err.as_io_error().kind());
+
+        let mut bytes = BufReader::new(&[ 0xE0, 0x9F, 0xBF ][..]);
+        let res = bytes.chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(&[0xE0, 0x9F, 0xBF][..], err.as_bytes());
+        assert_eq!(ErrorKind::InvalidData, err.as_io_error().kind());
+    }
+
+    #[test]
+    fn edgecase_three_four_bytes() {
+        assert_eq!(vec!['\u{00FFFF}'],
+                    BufReader::new(&[ 0xEF, 0xBF, 0xBF ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+        assert_eq!(vec!['\u{010000}'],
+                    BufReader::new(&[ 0xF0, 0x90, 0x80, 0x80 ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+
+        let mut bytes = BufReader::new(&[ 0xF0, 0x90, 0x80 ][..]);
+        let res = bytes.chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(&[0xF0, 0x90, 0x80][..], err.as_bytes());
+        assert_eq!(ErrorKind::UnexpectedEof, err.as_io_error().kind());
+
+        let mut bytes = BufReader::new(&[ 0xF0, 0x8F, 0xBF, 0xBF ][..]);
+        let res = bytes.chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(&[0xF0, 0x8F, 0xBF, 0xBF][..], err.as_bytes());
+        assert_eq!(ErrorKind::InvalidData, err.as_io_error().kind());
+    }
+
+    #[test]
+    fn edgecase_four_bytes_max() {
+        assert_eq!(vec!['\u{10FFFF}'],
+                    BufReader::new(&[ 0xF4, 0x8F, 0xBF, 0xBF ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+        //            BufReader::new(&[ 0xF7, 0xBF, 0xBF, 0xBF ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+
+        let mut bytes = BufReader::new(&[ 0xF8, 0x41 ][..]);
+        let res = bytes.chars().collect::<Vec<_>>();
+        assert_eq!(2, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(&[0xF8][..], err.as_bytes());
+        assert_eq!(ErrorKind::InvalidData, err.as_io_error().kind());
+
+        let normal_char = res[1].as_ref().unwrap();
+        assert_eq!(&'A', normal_char);
+
+        // Now we want to force `read_char` to make this call:
+        assert_eq!(None, std::char::from_u32(0x00110000));
+        // Sadly, there is no more specific way to test this.
+        let mut bytes = BufReader::new(&[ 0xF4, 0x90, 0x80, 0x80 ][..]);
+        let res = bytes.chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(&[0xF4, 0x90, 0x80, 0x80][..], err.as_bytes());
+        assert_eq!(ErrorKind::InvalidData, err.as_io_error().kind());
+    }
+
+    #[test]
     fn read_io_valid_unicode() {
         assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', '\0'],
                     BufReader::new("ABcd АБвгд U\0".as_bytes()).io_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
