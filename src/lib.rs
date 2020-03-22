@@ -5,7 +5,7 @@ extern crate quickcheck;
 extern crate quickcheck_macros;
 extern crate arrayvec;
 
-use std::{fmt, slice};
+use std::{fmt};
 use std::char::{self};
 use std::error::{Error};
 use std::io::{self, BufRead};
@@ -85,10 +85,11 @@ fn to_utf8(item: u32, expected_tail_bytes_count: u8, actual_tail_bytes_count: u8
     res
 }
 
-fn fill_buf_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::Result<&[u8]> {
-    let (buf_ptr, buf_len) = loop {
+fn read_byte_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::Result<Option<u8>> {
+    loop {
         match reader.fill_buf() {
-            Ok(buf) => break (buf.as_ptr(), buf.len()),
+            Ok(&[]) => return Ok(None),
+            Ok(buf) => return Ok(Some(buf[0])),
             Err(e) => {
                 if e.kind() != io::ErrorKind::Interrupted {
                     return Err(e)
@@ -96,7 +97,6 @@ fn fill_buf_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::R
             }
         }
     };
-    Ok(unsafe { slice::from_raw_parts(buf_ptr, buf_len) })
 }
 
 /// Extends [`BufRead`](std::io::BufRead) with methods for reading chars.
@@ -116,11 +116,10 @@ pub trait BufReadCharsExt : BufRead {
     /// If this function encounters an error of the kind [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
     /// then the error is ignored and the operation will continue.
     fn read_char(&mut self) -> Result<Option<char>, ReadCharError> {
-        match fill_buf_and_ignore_interrupts(self) {
+        match read_byte_and_ignore_interrupts(self) {
             Err(e) => return Err(ReadCharError { bytes: ArrayVec::new(), io_error: e }),
-            Ok(buf) => {
-                if buf.is_empty() { return Ok(None); }
-                let lead_byte = buf[0];
+            Ok(None) => return Ok(None),
+            Ok(Some(lead_byte)) => {
                 self.consume(1);
                 let tail_bytes_count = 'r: loop {
                     for i in 0..SEQUENCE_MAX_LENGTH {
@@ -132,16 +131,16 @@ pub trait BufReadCharsExt : BufRead {
                 };
                 let mut item = ((lead_byte & !LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32) << (TAIL_BYTE_VALUE_BITS * tail_bytes_count);
                 for tail_byte_index in 0..tail_bytes_count {
-                    match fill_buf_and_ignore_interrupts(self) {
+                    match read_byte_and_ignore_interrupts(self) {
                         Err(e) => return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_byte_index), io_error: e }),
-                        Ok(buf) => {
-                            if buf.is_empty() {
-                                return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_byte_index), io_error: io::Error::from(io::ErrorKind::UnexpectedEof) });
-                            }
-                            if buf[0] & TAIL_BYTE_MASK != TAIL_BYTE_PATTERN {
+                        Ok(None) => {
+                            return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_byte_index), io_error: io::Error::from(io::ErrorKind::UnexpectedEof) });
+                        },
+                        Ok(Some(tail_byte)) => {
+                            if tail_byte & TAIL_BYTE_MASK != TAIL_BYTE_PATTERN {
                                 return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_byte_index), io_error: io::Error::from(io::ErrorKind::InvalidData) });
                             }
-                            item |= ((buf[0] & !TAIL_BYTE_MASK) as u32) << ((tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS);
+                            item |= ((tail_byte & !TAIL_BYTE_MASK) as u32) << ((tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS);
                             self.consume(1);
                         }
                     }
