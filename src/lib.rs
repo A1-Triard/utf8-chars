@@ -67,6 +67,25 @@ impl<'a, T: BufRead + ?Sized> Iterator for Chars<'a, T> {
     }
 }
 
+/// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
+/// In contrast to [`Chars`](Chars), the error type is
+/// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
+/// compatible, at the price of losing the UTF-8 context bytes in the error
+/// message.
+///
+/// This struct is generally created by calling
+/// [`io_chars`](BufReadCharsExt::io_chars) on a [`BufRead`](std::io::BufRead).
+#[derive(Debug)]
+pub struct IoChars<'a, T: BufRead + ?Sized>(&'a mut T);
+
+impl<'a, T: BufRead + ?Sized> Iterator for IoChars<'a, T> {
+    type Item = Result<char, io::Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.read_char().map_err(|e| e.into_io_error()).transpose()
+    }
+}
+
 const SEQUENCE_MAX_LENGTH: u8 = 4;
 const LEAD_BYTE_MASK: [u8; SEQUENCE_MAX_LENGTH as usize] = [0x80, 0xE0, 0xF0, 0xF8];
 const LEAD_BYTE_PATTERN: [u8; SEQUENCE_MAX_LENGTH as usize] = [0x00, 0xC0, 0xE0, 0xF0];
@@ -105,6 +124,15 @@ pub trait BufReadCharsExt : BufRead {
     ///
     /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, ReadCharError>`.
     fn chars(&mut self) -> Chars<Self> { Chars(self) }
+
+    /// Returns an iterator over the chars of this reader.
+    /// In contrast to [`chars`](BufReadCharsExt::chars), the error type is
+    /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
+    /// compatible, at the price of losing the UTF-8 context bytes in the error
+    /// message.
+    ///
+    /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, io::Error>`.
+    fn io_chars(&mut self) -> IoChars<Self> { IoChars(self) }
 
     /// Reads a char from the underlying reader.
     ///
@@ -161,7 +189,7 @@ impl<T: BufRead + ?Sized> BufReadCharsExt for T { }
 
 #[cfg(test)]
 mod tests {
-    use std::io::{BufRead, BufReader};
+    use std::io::{BufRead, BufReader, ErrorKind};
     use std::vec::{Vec};
     use crate::{BufReadCharsExt};
 
@@ -169,6 +197,12 @@ mod tests {
     fn read_valid_unicode() {
         assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', '\0'],
                     BufReader::new("ABcd АБвгд U\0".as_bytes()).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn read_io_valid_unicode() {
+        assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', '\0'],
+                    BufReader::new("ABcd АБвгд U\0".as_bytes()).io_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
     }
 
     #[test]
@@ -191,6 +225,33 @@ mod tests {
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xF5, 0x8F, 0xBF, 0xBF][..], err.as_bytes());
+    }
+
+    #[test]
+    fn read_io_value_out_of_range() {
+        let mut bytes = BufReader::new(&[ 0xF5, 0x8F, 0xBF, 0xBF ][..]);
+        let res = bytes.io_chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(ErrorKind::InvalidData, err.kind());
+    }
+
+    #[test]
+    fn read_io_incomplete_twobyte() {
+        let mut bytes = BufReader::new(&[ 0xC3 ][..]);  // 0xC3 0xA4 = 'ä'
+        let res = bytes.io_chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(ErrorKind::UnexpectedEof, err.kind());
+    }
+
+    #[test]
+    fn read_io_incomplete_threebyte() {
+        let mut bytes = BufReader::new(&[ 0xE1, 0xBA ][..]);  // 0xE1 0xBA 0xB9 = 'ẹ'
+        let res = bytes.io_chars().collect::<Vec<_>>();
+        assert_eq!(1, res.len());
+        let err = res[0].as_ref().err().unwrap();
+        assert_eq!(ErrorKind::UnexpectedEof, err.kind());
     }
 
     #[test]
