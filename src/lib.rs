@@ -100,7 +100,7 @@ impl<'a, T: BufRead + ?Sized> Iterator for IoChars<'a, T> {
     type Item = io::Result<char>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.read_char().transpose()
+        self.0.read_char_raw().map_err(|x| x.into_io_error()).transpose()
     }
 }
 
@@ -168,13 +168,9 @@ pub trait BufReadCharsExt : BufRead {
     ///
     /// If this function encounters an error of the kind [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
     /// then the error is ignored and the operation will continue.
-    ///
-    /// In contrast to [`read_char_raw`](BufReadCharsExt::chars), the error type is
-    /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
-    /// compatible, at the price of losing the UTF-8 context bytes in the error
-    /// message.
-    fn read_char(&mut self) -> io::Result<Option<char>> {
-        self.read_char_raw().map_err(|x| x.into_io_error())
+    #[deprecated="Use read_char_raw instead. The read_char method will be deleted to free this name for other use."]
+    fn read_char(&mut self) -> Result<Option<char>, ReadCharError> {
+        self.read_char_raw()
     }
 
     /// Reads a char from the underlying reader.
