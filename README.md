@@ -9,7 +9,7 @@ use std::io::{stdin};
 use utf8_chars::{BufReadCharsExt};
 
 fn main() {
-    for c in stdin().lock().chars().map(|x| x.unwrap()) {
+    for c in stdin().lock().io_chars().map(|x| x.unwrap()) {
         println!("{}", c);
     }
 }

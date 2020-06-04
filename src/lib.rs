@@ -1,3 +1,4 @@
+#![deny(warnings)]
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
@@ -56,10 +57,27 @@ impl fmt::Display for ReadCharError {
 ///
 /// This struct is generally created by calling [`chars`](BufReadCharsExt::chars)
 /// on a [`BufRead`](std::io::BufRead).
+#[deprecated="Use CharsRaw instead."]
 #[derive(Debug)]
 pub struct Chars<'a, T: BufRead + ?Sized>(&'a mut T);
 
+#[allow(deprecated)]
 impl<'a, T: BufRead + ?Sized> Iterator for Chars<'a, T> {
+    type Item = Result<char, ReadCharError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.read_char().transpose()
+    }
+}
+
+/// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
+///
+/// This struct is generally created by calling [`chars_raw`](BufReadCharsExt::chars_raw)
+/// on a [`BufRead`](std::io::BufRead).
+#[derive(Debug)]
+pub struct CharsRaw<'a, T: BufRead + ?Sized>(&'a mut T);
+
+impl<'a, T: BufRead + ?Sized> Iterator for CharsRaw<'a, T> {
     type Item = Result<char, ReadCharError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -124,12 +142,13 @@ pub trait BufReadCharsExt : BufRead {
     ///
     /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, ReadCharError>`.
     #[deprecated="Use chars_raw instead. The chars method will be deleted to free this name for other use."]
+    #[allow(deprecated)]
     fn chars(&mut self) -> Chars<Self> { Chars(self) }
 
     /// Returns an iterator over the chars of this reader.
     ///
     /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, ReadCharError>`.
-    fn chars_raw(&mut self) -> Chars<Self> { Chars(self) }
+    fn chars_raw(&mut self) -> CharsRaw<Self> { CharsRaw(self) }
 
     /// Returns an iterator over the chars of this reader.
     /// In contrast to [`chars`](BufReadCharsExt::chars), the error type is
@@ -202,25 +221,25 @@ mod tests {
     #[test]
     fn read_valid_unicode() {
         assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', '\0'],
-                    BufReader::new("ABcd АБвгд U\0".as_bytes()).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+                    BufReader::new("ABcd АБвгд U\0".as_bytes()).chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
     }
 
     #[test]
     fn edgecase_one_two_bytes() {
         assert_eq!(vec!['\x7F'],
-                    BufReader::new(&[ 0x7F ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+                    BufReader::new(&[ 0x7F ][..]).chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
         assert_eq!(vec!['\u{0080}'],
-                    BufReader::new(&[ 0xC2, 0x80 ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+                    BufReader::new(&[ 0xC2, 0x80 ][..]).chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
 
         let mut bytes = BufReader::new(&[ 0xC2 ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xC2][..], err.as_bytes());
         assert_eq!(ErrorKind::UnexpectedEof, err.as_io_error().kind());
 
         let mut bytes = BufReader::new(&[ 0xC1, 0xBF ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xC1, 0xBF][..], err.as_bytes());
@@ -230,19 +249,19 @@ mod tests {
     #[test]
     fn edgecase_two_three_bytes() {
         assert_eq!(vec!['\u{07FF}'],
-                    BufReader::new(&[ 0xDF, 0xBF ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+                    BufReader::new(&[ 0xDF, 0xBF ][..]).chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
         assert_eq!(vec!['\u{0800}'],
-                    BufReader::new(&[ 0xE0, 0xA0, 0x80 ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+                    BufReader::new(&[ 0xE0, 0xA0, 0x80 ][..]).chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
 
         let mut bytes = BufReader::new(&[ 0xE0, 0xA0 ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xE0, 0xA0][..], err.as_bytes());
         assert_eq!(ErrorKind::UnexpectedEof, err.as_io_error().kind());
 
         let mut bytes = BufReader::new(&[ 0xE0, 0x9F, 0xBF ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xE0, 0x9F, 0xBF][..], err.as_bytes());
@@ -252,19 +271,19 @@ mod tests {
     #[test]
     fn edgecase_three_four_bytes() {
         assert_eq!(vec!['\u{00FFFF}'],
-                    BufReader::new(&[ 0xEF, 0xBF, 0xBF ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+                    BufReader::new(&[ 0xEF, 0xBF, 0xBF ][..]).chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
         assert_eq!(vec!['\u{010000}'],
-                    BufReader::new(&[ 0xF0, 0x90, 0x80, 0x80 ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+                    BufReader::new(&[ 0xF0, 0x90, 0x80, 0x80 ][..]).chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
 
         let mut bytes = BufReader::new(&[ 0xF0, 0x90, 0x80 ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xF0, 0x90, 0x80][..], err.as_bytes());
         assert_eq!(ErrorKind::UnexpectedEof, err.as_io_error().kind());
 
         let mut bytes = BufReader::new(&[ 0xF0, 0x8F, 0xBF, 0xBF ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xF0, 0x8F, 0xBF, 0xBF][..], err.as_bytes());
@@ -274,11 +293,11 @@ mod tests {
     #[test]
     fn edgecase_four_bytes_max() {
         assert_eq!(vec!['\u{10FFFF}'],
-                    BufReader::new(&[ 0xF4, 0x8F, 0xBF, 0xBF ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
-        //            BufReader::new(&[ 0xF7, 0xBF, 0xBF, 0xBF ][..]).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+                    BufReader::new(&[ 0xF4, 0x8F, 0xBF, 0xBF ][..]).chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
+        //            BufReader::new(&[ 0xF7, 0xBF, 0xBF, 0xBF ][..]).chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
 
         let mut bytes = BufReader::new(&[ 0xF8, 0x41 ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(2, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xF8][..], err.as_bytes());
@@ -291,7 +310,7 @@ mod tests {
         assert_eq!(None, std::char::from_u32(0x00110000));
         // Sadly, there is no more specific way to test this.
         let mut bytes = BufReader::new(&[ 0xF4, 0x90, 0x80, 0x80 ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xF4, 0x90, 0x80, 0x80][..], err.as_bytes());
@@ -307,20 +326,20 @@ mod tests {
     #[test]
     fn read_valid_unicode_from_dyn_read() {
         let bytes: &mut dyn BufRead = &mut BufReader::new("ABcd АБвгд UV".as_bytes());
-        assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+        assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
     }
 
     #[test]
     fn do_not_take_extra_bytes() {
         let mut bytes = BufReader::new("ABcd АБвгд UV".as_bytes());
-        assert_eq!(vec!['A', 'B', 'c', 'd'], bytes.chars().take(4).map(|x| x.unwrap()).collect::<Vec<_>>());
-        assert_eq!(vec![' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+        assert_eq!(vec!['A', 'B', 'c', 'd'], bytes.chars_raw().take(4).map(|x| x.unwrap()).collect::<Vec<_>>());
+        assert_eq!(vec![' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
     }
 
     #[test]
     fn read_value_out_of_range() {
         let mut bytes = BufReader::new(&[ 0xF5, 0x8F, 0xBF, 0xBF ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xF5, 0x8F, 0xBF, 0xBF][..], err.as_bytes());
@@ -356,7 +375,7 @@ mod tests {
     #[test]
     fn read_surrogate() {
         let mut bytes = BufReader::new(&[ 0xED, 0xA0, 0x80 ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(&[0xED, 0xA0, 0x80][..], err.as_bytes());
@@ -365,7 +384,7 @@ mod tests {
     #[test]
     fn read_invalid_sequences() {
         let mut bytes = BufReader::new(&[ 0x81, 0x82, 0xC1, 0x07, 0xC1, 0x87, 0xC2, 0xC2, 0x82, 0xF7, 0x88, 0x89, 0x07 ][..]);
-        let res = bytes.chars().collect::<Vec<_>>();
+        let res = bytes.chars_raw().collect::<Vec<_>>();
         assert_eq!(9, res.len());
         assert_eq!(&[0x81][..], res[0].as_ref().err().unwrap().as_bytes());
         assert_eq!(&[0x82][..], res[1].as_ref().err().unwrap().as_bytes());
@@ -381,14 +400,14 @@ mod tests {
     #[quickcheck]
     fn read_string(s: String) -> bool {
         let mut t = String::new();
-        BufReader::new(s.as_bytes()).chars().for_each(|c| t.push(c.unwrap()));
+        BufReader::new(s.as_bytes()).chars_raw().for_each(|c| t.push(c.unwrap()));
         s == t
     }
 
     #[quickcheck]
     fn read_array(b: Vec<u8>) -> bool {
         let mut t = Vec::new();
-        BufReader::new(&b[..]).chars().for_each(|c| t.append(&mut c.map_or_else(|e| e.as_bytes().to_vec(), |s| s.to_string().as_bytes().to_vec())));
+        BufReader::new(&b[..]).chars_raw().for_each(|c| t.append(&mut c.map_or_else(|e| e.as_bytes().to_vec(), |s| s.to_string().as_bytes().to_vec())));
         b == t
     }
 }
