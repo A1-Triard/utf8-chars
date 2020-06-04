@@ -86,7 +86,7 @@ impl<'a, T: BufRead + ?Sized> Iterator for CharsRaw<'a, T> {
 }
 
 /// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
-/// In contrast to [`Chars`](Chars), the error type is
+/// In contrast to [`CharsRaw`](CharsRaw), the error type is
 /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
 /// compatible, at the price of losing the UTF-8 context bytes in the error
 /// message.
@@ -147,7 +147,7 @@ pub trait BufReadCharsExt : BufRead {
 
     /// Returns an iterator over the chars of this reader.
     ///
-    /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, ReadCharError>`.
+    /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, `[`ReadCharError`](ReadCharError)`>`.
     fn chars_raw(&mut self) -> CharsRaw<Self> { CharsRaw(self) }
 
     /// Returns an iterator over the chars of this reader.
@@ -156,7 +156,7 @@ pub trait BufReadCharsExt : BufRead {
     /// compatible, at the price of losing the UTF-8 context bytes in the error
     /// message.
     ///
-    /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, io::Error>`.
+    /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, `[`io::Error`](std::io::Error)`>`.
     fn io_chars(&mut self) -> IoChars<Self> { IoChars(self) }
 
     /// Reads a char from the underlying reader.

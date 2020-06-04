@@ -1,6 +1,6 @@
 [package]
 name = "utf8-chars"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["warlock <internalmike@gmail.com>"]
 description = "Char-per-char iterator and `read_char` method for `BufRead`."
 readme = "README.md"
