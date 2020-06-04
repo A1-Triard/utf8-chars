@@ -66,7 +66,7 @@ impl<'a, T: BufRead + ?Sized> Iterator for Chars<'a, T> {
     type Item = Result<char, ReadCharError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.read_char().transpose()
+        self.0.read_char_raw().transpose()
     }
 }
 
@@ -81,7 +81,7 @@ impl<'a, T: BufRead + ?Sized> Iterator for CharsRaw<'a, T> {
     type Item = Result<char, ReadCharError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.read_char().transpose()
+        self.0.read_char_raw().transpose()
     }
 }
 
@@ -100,7 +100,7 @@ impl<'a, T: BufRead + ?Sized> Iterator for IoChars<'a, T> {
     type Item = Result<char, io::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.read_char().map_err(|e| e.into_io_error()).transpose()
+        self.0.read_char().transpose()
     }
 }
 
@@ -151,7 +151,7 @@ pub trait BufReadCharsExt : BufRead {
     fn chars_raw(&mut self) -> CharsRaw<Self> { CharsRaw(self) }
 
     /// Returns an iterator over the chars of this reader.
-    /// In contrast to [`chars`](BufReadCharsExt::chars), the error type is
+    /// In contrast to [`chars_raw`](BufReadCharsExt::chars_raw), the error type is
     /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
     /// compatible, at the price of losing the UTF-8 context bytes in the error
     /// message.
@@ -168,7 +168,25 @@ pub trait BufReadCharsExt : BufRead {
     ///
     /// If this function encounters an error of the kind [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
     /// then the error is ignored and the operation will continue.
-    fn read_char(&mut self) -> Result<Option<char>, ReadCharError> {
+    ///
+    /// In contrast to [`read_char_raw`](BufReadCharsExt::chars), the error type is
+    /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
+    /// compatible, at the price of losing the UTF-8 context bytes in the error
+    /// message.
+    fn read_char(&mut self) -> Result<Option<char>, io::Error> {
+        self.read_char_raw().map_err(|x| x.into_io_error())
+    }
+
+    /// Reads a char from the underlying reader.
+    ///
+    /// Returns
+    /// - `Ok(Some(char))` if a char has successfully read,
+    /// - `Ok(None)` if the stream has reached EOF before any byte was read,
+    /// - `Err(err)` if an I/O error occurred, or read byte sequence was not recognised as a valid UTF-8.
+    ///
+    /// If this function encounters an error of the kind [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
+    /// then the error is ignored and the operation will continue.
+    fn read_char_raw(&mut self) -> Result<Option<char>, ReadCharError> {
         match read_byte_and_ignore_interrupts(self) {
             Err(e) => return Err(ReadCharError { bytes: ArrayVec::new(), io_error: e }),
             Ok(None) => return Ok(None),
