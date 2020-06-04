@@ -123,7 +123,13 @@ pub trait BufReadCharsExt : BufRead {
     /// Returns an iterator over the chars of this reader.
     ///
     /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, ReadCharError>`.
+    #[deprecated="Use chars_raw instead. The chars method will be deleted to free this name for other use."]
     fn chars(&mut self) -> Chars<Self> { Chars(self) }
+
+    /// Returns an iterator over the chars of this reader.
+    ///
+    /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, ReadCharError>`.
+    fn chars_raw(&mut self) -> Chars<Self> { Chars(self) }
 
     /// Returns an iterator over the chars of this reader.
     /// In contrast to [`chars`](BufReadCharsExt::chars), the error type is
