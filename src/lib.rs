@@ -97,7 +97,7 @@ impl<'a, T: BufRead + ?Sized> Iterator for CharsRaw<'a, T> {
 pub struct IoChars<'a, T: BufRead + ?Sized>(&'a mut T);
 
 impl<'a, T: BufRead + ?Sized> Iterator for IoChars<'a, T> {
-    type Item = Result<char, io::Error>;
+    type Item = io::Result<char>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.read_char().transpose()
@@ -156,7 +156,7 @@ pub trait BufReadCharsExt : BufRead {
     /// compatible, at the price of losing the UTF-8 context bytes in the error
     /// message.
     ///
-    /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, `[`io::Error`](std::io::Error)`>`.
+    /// The iterator returned from this function will yield instances of [`io::Result`](std::io::Result)`<char>`.
     fn io_chars(&mut self) -> IoChars<Self> { IoChars(self) }
 
     /// Reads a char from the underlying reader.
@@ -173,7 +173,7 @@ pub trait BufReadCharsExt : BufRead {
     /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
     /// compatible, at the price of losing the UTF-8 context bytes in the error
     /// message.
-    fn read_char(&mut self) -> Result<Option<char>, io::Error> {
+    fn read_char(&mut self) -> io::Result<Option<char>> {
         self.read_char_raw().map_err(|x| x.into_io_error())
     }
 
