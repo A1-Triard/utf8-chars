@@ -53,6 +53,7 @@ impl fmt::Display for ReadCharError {
     }
 }
 
+/*
 /// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
 ///
 /// This struct is generally created by calling [`chars`](BufReadCharsExt::chars)
@@ -69,6 +70,7 @@ impl<'a, T: BufRead + ?Sized> Iterator for Chars<'a, T> {
         self.0.read_char_raw().transpose()
     }
 }
+*/
 
 /// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
 ///
@@ -138,12 +140,14 @@ fn read_byte_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::
 
 /// Extends [`BufRead`](std::io::BufRead) with methods for reading chars.
 pub trait BufReadCharsExt : BufRead {
+    /*
     /// Returns an iterator over the chars of this reader.
     ///
     /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, ReadCharError>`.
     #[deprecated="Use chars_raw instead. The chars method will be deleted to free this name for other use."]
     #[allow(deprecated)]
     fn chars(&mut self) -> Chars<Self> { Chars(self) }
+    */
 
     /// Returns an iterator over the chars of this reader.
     ///
@@ -159,6 +163,7 @@ pub trait BufReadCharsExt : BufRead {
     /// The iterator returned from this function will yield instances of [`io::Result`](std::io::Result)`<char>`.
     fn io_chars(&mut self) -> IoChars<Self> { IoChars(self) }
 
+    /*
     /// Reads a char from the underlying reader.
     ///
     /// Returns
@@ -172,6 +177,7 @@ pub trait BufReadCharsExt : BufRead {
     fn read_char(&mut self) -> Result<Option<char>, ReadCharError> {
         self.read_char_raw()
     }
+    */
 
     /// Reads a char from the underlying reader.
     ///
