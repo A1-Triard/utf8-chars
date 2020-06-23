@@ -190,8 +190,8 @@ pub trait BufReadCharsExt : BufRead {
     /// then the error is ignored and the operation will continue.
     fn read_char_raw(&mut self) -> Result<Option<char>, ReadCharError> {
         match read_byte_and_ignore_interrupts(self) {
-            Err(e) => return Err(ReadCharError { bytes: ArrayVec::new(), io_error: e }),
-            Ok(None) => return Ok(None),
+            Err(e) => Err(ReadCharError { bytes: ArrayVec::new(), io_error: e }),
+            Ok(None) => Ok(None),
             Ok(Some(lead_byte)) => {
                 self.consume(1);
                 let tail_bytes_count = 'r: loop {
@@ -200,7 +200,7 @@ pub trait BufReadCharsExt : BufRead {
                     }
                     let mut bytes = ArrayVec::new();
                     bytes.push(lead_byte);
-                    return Err(ReadCharError { bytes: bytes, io_error: io::Error::from(io::ErrorKind::InvalidData) });
+                    return Err(ReadCharError { bytes, io_error: io::Error::from(io::ErrorKind::InvalidData) });
                 };
                 let mut item = ((lead_byte & !LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32) << (TAIL_BYTE_VALUE_BITS * tail_bytes_count);
                 for tail_byte_index in 0..tail_bytes_count {
