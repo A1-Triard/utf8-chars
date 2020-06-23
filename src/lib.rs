@@ -1,4 +1,5 @@
 #![deny(warnings)]
+#![allow(clippy::never_loop)]
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
