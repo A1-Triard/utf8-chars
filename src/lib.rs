@@ -54,24 +54,24 @@ impl fmt::Display for ReadCharError {
     }
 }
 
-/*
 /// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
+/// In contrast to [`CharsRaw`](CharsRaw), the error type is
+/// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
+/// compatible, at the price of losing the UTF-8 context bytes in the error
+/// message.
 ///
-/// This struct is generally created by calling [`chars`](BufReadCharsExt::chars)
-/// on a [`BufRead`](std::io::BufRead).
-#[deprecated="Use CharsRaw instead."]
+/// This struct is generally created by calling
+/// [`chars`](BufReadCharsExt::chars) on a [`BufRead`](std::io::BufRead).
 #[derive(Debug)]
 pub struct Chars<'a, T: BufRead + ?Sized>(&'a mut T);
 
-#[allow(deprecated)]
 impl<'a, T: BufRead + ?Sized> Iterator for Chars<'a, T> {
-    type Item = Result<char, ReadCharError>;
+    type Item = io::Result<char>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.read_char_raw().transpose()
+        self.0.read_char_raw().map_err(|x| x.into_io_error()).transpose()
     }
 }
-*/
 
 /// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
 ///
@@ -96,9 +96,11 @@ impl<'a, T: BufRead + ?Sized> Iterator for CharsRaw<'a, T> {
 ///
 /// This struct is generally created by calling
 /// [`io_chars`](BufReadCharsExt::io_chars) on a [`BufRead`](std::io::BufRead).
+#[deprecated="Use Chars instead."]
 #[derive(Debug)]
 pub struct IoChars<'a, T: BufRead + ?Sized>(&'a mut T);
 
+#[allow(deprecated)]
 impl<'a, T: BufRead + ?Sized> Iterator for IoChars<'a, T> {
     type Item = io::Result<char>;
 
@@ -141,14 +143,14 @@ fn read_byte_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::
 
 /// Extends [`BufRead`](std::io::BufRead) with methods for reading chars.
 pub trait BufReadCharsExt : BufRead {
-    /*
     /// Returns an iterator over the chars of this reader.
+    /// In contrast to [`chars_raw`](BufReadCharsExt::chars_raw), the error type is
+    /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
+    /// compatible, at the price of losing the UTF-8 context bytes in the error
+    /// message.
     ///
-    /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, ReadCharError>`.
-    #[deprecated="Use chars_raw instead. The chars method will be deleted to free this name for other use."]
-    #[allow(deprecated)]
+    /// The iterator returned from this function will yield instances of [`io::Result`](std::io::Result)`<char>`.
     fn chars(&mut self) -> Chars<Self> { Chars(self) }
-    */
 
     /// Returns an iterator over the chars of this reader.
     ///
@@ -162,10 +164,15 @@ pub trait BufReadCharsExt : BufRead {
     /// message.
     ///
     /// The iterator returned from this function will yield instances of [`io::Result`](std::io::Result)`<char>`.
+    #[deprecated="Use chars instead."]
+    #[allow(deprecated)]
     fn io_chars(&mut self) -> IoChars<Self> { IoChars(self) }
 
-    /*
     /// Reads a char from the underlying reader.
+    /// In contrast to [`read_char_raw`](BufReadCharsExt::read_char_raw), the error type is
+    /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
+    /// compatible, at the price of losing the UTF-8 context bytes in the error
+    /// message.
     ///
     /// Returns
     /// - `Ok(Some(char))` if a char has successfully read,
@@ -174,11 +181,9 @@ pub trait BufReadCharsExt : BufRead {
     ///
     /// If this function encounters an error of the kind [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
     /// then the error is ignored and the operation will continue.
-    #[deprecated="Use read_char_raw instead. The read_char method will be deleted to free this name for other use."]
-    fn read_char(&mut self) -> Result<Option<char>, ReadCharError> {
-        self.read_char_raw()
+    fn read_char(&mut self) -> io::Result<Option<char>> {
+        self.read_char_raw().map_err(|x| x.into_io_error())
     }
-    */
 
     /// Reads a char from the underlying reader.
     ///
@@ -341,7 +346,7 @@ mod tests {
     #[test]
     fn read_io_valid_unicode() {
         assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', '\0'],
-                    BufReader::new("ABcd АБвгд U\0".as_bytes()).io_chars().map(|x| x.unwrap()).collect::<Vec<_>>());
+                    BufReader::new("ABcd АБвгд U\0".as_bytes()).chars().map(|x| x.unwrap()).collect::<Vec<_>>());
     }
 
     #[test]
@@ -369,7 +374,7 @@ mod tests {
     #[test]
     fn read_io_value_out_of_range() {
         let mut bytes = BufReader::new(&[ 0xF5, 0x8F, 0xBF, 0xBF ][..]);
-        let res = bytes.io_chars().collect::<Vec<_>>();
+        let res = bytes.chars().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(ErrorKind::InvalidData, err.kind());
@@ -378,7 +383,7 @@ mod tests {
     #[test]
     fn read_io_incomplete_twobyte() {
         let mut bytes = BufReader::new(&[ 0xC3 ][..]);  // 0xC3 0xA4 = 'ä'
-        let res = bytes.io_chars().collect::<Vec<_>>();
+        let res = bytes.chars().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(ErrorKind::UnexpectedEof, err.kind());
@@ -387,7 +392,7 @@ mod tests {
     #[test]
     fn read_io_incomplete_threebyte() {
         let mut bytes = BufReader::new(&[ 0xE1, 0xBA ][..]);  // 0xE1 0xBA 0xB9 = 'ẹ'
-        let res = bytes.io_chars().collect::<Vec<_>>();
+        let res = bytes.chars().collect::<Vec<_>>();
         assert_eq!(1, res.len());
         let err = res[0].as_ref().err().unwrap();
         assert_eq!(ErrorKind::UnexpectedEof, err.kind());
