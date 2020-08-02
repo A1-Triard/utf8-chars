@@ -88,27 +88,6 @@ impl<'a, T: BufRead + ?Sized> Iterator for CharsRaw<'a, T> {
     }
 }
 
-/// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
-/// In contrast to [`CharsRaw`](CharsRaw), the error type is
-/// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
-/// compatible, at the price of losing the UTF-8 context bytes in the error
-/// message.
-///
-/// This struct is generally created by calling
-/// [`io_chars`](BufReadCharsExt::io_chars) on a [`BufRead`](std::io::BufRead).
-#[deprecated="Use Chars instead."]
-#[derive(Debug)]
-pub struct IoChars<'a, T: BufRead + ?Sized>(&'a mut T);
-
-#[allow(deprecated)]
-impl<'a, T: BufRead + ?Sized> Iterator for IoChars<'a, T> {
-    type Item = io::Result<char>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.read_char_raw().map_err(|x| x.into_io_error()).transpose()
-    }
-}
-
 const SEQUENCE_MAX_LENGTH: u8 = 4;
 const LEAD_BYTE_MASK: [u8; SEQUENCE_MAX_LENGTH as usize] = [0x80, 0xE0, 0xF0, 0xF8];
 const LEAD_BYTE_PATTERN: [u8; SEQUENCE_MAX_LENGTH as usize] = [0x00, 0xC0, 0xE0, 0xF0];
@@ -119,10 +98,16 @@ const SEQUENCE_MIN_VALUE: [u32; SEQUENCE_MAX_LENGTH as usize] = [0, 0x80, 0x800,
 
 fn to_utf8(item: u32, expected_tail_bytes_count: u8, actual_tail_bytes_count: u8) -> ArrayVec<[u8; SEQUENCE_MAX_LENGTH as usize]> {
     let mut res = ArrayVec::new();
-    let lead_byte = LEAD_BYTE_PATTERN[expected_tail_bytes_count as usize] | ((item >> (TAIL_BYTE_VALUE_BITS * expected_tail_bytes_count)) as u8);
+    let lead_byte =
+        LEAD_BYTE_PATTERN[expected_tail_bytes_count as usize]
+        | ((item >> (TAIL_BYTE_VALUE_BITS * expected_tail_bytes_count)) as u8)
+    ;
     res.push(lead_byte);
     for tail_byte_index in 0..actual_tail_bytes_count {
-        res.push(TAIL_BYTE_PATTERN | ((item >> ((expected_tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS)) as u8) & !TAIL_BYTE_MASK);
+        res.push(
+            TAIL_BYTE_PATTERN
+            | ((item >> ((expected_tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS)) as u8) & !TAIL_BYTE_MASK
+        );
     }
     res
 }
@@ -156,17 +141,6 @@ pub trait BufReadCharsExt : BufRead {
     ///
     /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, `[`ReadCharError`](ReadCharError)`>`.
     fn chars_raw(&mut self) -> CharsRaw<Self> { CharsRaw(self) }
-
-    /// Returns an iterator over the chars of this reader.
-    /// In contrast to [`chars_raw`](BufReadCharsExt::chars_raw), the error type is
-    /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
-    /// compatible, at the price of losing the UTF-8 context bytes in the error
-    /// message.
-    ///
-    /// The iterator returned from this function will yield instances of [`io::Result`](std::io::Result)`<char>`.
-    #[deprecated="Use chars instead."]
-    #[allow(deprecated)]
-    fn io_chars(&mut self) -> IoChars<Self> { IoChars(self) }
 
     /// Reads a char from the underlying reader.
     /// In contrast to [`read_char_raw`](BufReadCharsExt::read_char_raw), the error type is
@@ -208,27 +182,46 @@ pub trait BufReadCharsExt : BufRead {
                     bytes.push(lead_byte);
                     return Err(ReadCharError { bytes, io_error: io::Error::from(io::ErrorKind::InvalidData) });
                 };
-                let mut item = ((lead_byte & !LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32) << (TAIL_BYTE_VALUE_BITS * tail_bytes_count);
+                let mut item =
+                    ((lead_byte & !LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32)
+                    << (TAIL_BYTE_VALUE_BITS * tail_bytes_count)
+                ;
                 for tail_byte_index in 0..tail_bytes_count {
                     match read_byte_and_ignore_interrupts(self) {
-                        Err(e) => return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_byte_index), io_error: e }),
-                        Ok(None) => {
-                            return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_byte_index), io_error: io::Error::from(io::ErrorKind::UnexpectedEof) });
-                        },
+                        Err(e) => return Err(ReadCharError {
+                            bytes: to_utf8(item, tail_bytes_count, tail_byte_index),
+                            io_error: e
+                        }),
+                        Ok(None) => return Err(ReadCharError {
+                            bytes: to_utf8(item, tail_bytes_count, tail_byte_index),
+                            io_error: io::Error::from(io::ErrorKind::UnexpectedEof)
+                        }),
                         Ok(Some(tail_byte)) => {
                             if tail_byte & TAIL_BYTE_MASK != TAIL_BYTE_PATTERN {
-                                return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_byte_index), io_error: io::Error::from(io::ErrorKind::InvalidData) });
+                                return Err(ReadCharError {
+                                    bytes: to_utf8(item, tail_bytes_count, tail_byte_index),
+                                    io_error: io::Error::from(io::ErrorKind::InvalidData)
+                                });
                             }
-                            item |= ((tail_byte & !TAIL_BYTE_MASK) as u32) << ((tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS);
+                            item |=
+                                ((tail_byte & !TAIL_BYTE_MASK) as u32)
+                                << ((tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS)
+                            ;
                             self.consume(1);
                         }
                     }
                 }
                 if item < SEQUENCE_MIN_VALUE[tail_bytes_count as usize] {
-                    return Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_bytes_count), io_error: io::Error::from(io::ErrorKind::InvalidData) });
+                    return Err(ReadCharError {
+                        bytes: to_utf8(item, tail_bytes_count, tail_bytes_count),
+                        io_error: io::Error::from(io::ErrorKind::InvalidData)
+                    });
                 }
                 match char::from_u32(item) {
-                    None => Err(ReadCharError { bytes: to_utf8(item, tail_bytes_count, tail_bytes_count), io_error: io::Error::from(io::ErrorKind::InvalidData) }),
+                    None => Err(ReadCharError {
+                        bytes: to_utf8(item, tail_bytes_count, tail_bytes_count),
+                        io_error: io::Error::from(io::ErrorKind::InvalidData)
+                    }),
                     Some(item) => Ok(Some(item))
                 }
             }
@@ -352,7 +345,10 @@ mod tests {
     #[test]
     fn read_valid_unicode_from_dyn_read() {
         let bytes: &mut dyn BufRead = &mut BufReader::new("ABcd АБвгд UV".as_bytes());
-        assert_eq!(vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'], bytes.chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>());
+        assert_eq!(
+            vec!['A', 'B', 'c', 'd', ' ', 'А', 'Б', 'в', 'г', 'д', ' ', 'U', 'V'],
+            bytes.chars_raw().map(|x| x.unwrap()).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -433,7 +429,9 @@ mod tests {
     #[quickcheck]
     fn read_array(b: Vec<u8>) -> bool {
         let mut t = Vec::new();
-        BufReader::new(&b[..]).chars_raw().for_each(|c| t.append(&mut c.map_or_else(|e| e.as_bytes().to_vec(), |s| s.to_string().as_bytes().to_vec())));
+        BufReader::new(&b[..]).chars_raw().for_each(|c|
+            t.append(&mut c.map_or_else(|e| e.as_bytes().to_vec(), |s| s.to_string().as_bytes().to_vec()))
+        );
         b == t
     }
 }
