@@ -115,8 +115,7 @@ fn to_utf8(item: u32, expected_tail_bytes_count: u8, actual_tail_bytes_count: u8
 fn read_byte_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::Result<Option<u8>> {
     loop {
         match reader.fill_buf() {
-            Ok(&[]) => return Ok(None),
-            Ok(buf) => return Ok(Some(buf[0])),
+            Ok(buf) => return Ok(buf.get(0).copied()),
             Err(e) => {
                 if e.kind() != io::ErrorKind::Interrupted {
                     return Err(e)
