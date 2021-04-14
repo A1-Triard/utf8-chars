@@ -11,12 +11,56 @@ env:
 
 jobs:
   build:
-
-    runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        rust: [stable, beta, nightly]
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust }}
+        override: true
+    - name: build
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: "--verbose"
+    - name: test --tests
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: "--verbose --tests"
+    - name: test --doc
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: "--verbose --doc"
+    - name: doc
+      uses: actions-rs/cargo@v1
+      with:
+        command: doc
+        args: "--verbose"
+    - name: test --docsrs
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: "--verbose --doc"
+      env:
+        RUSTFLAGS: "--cfg docsrs"
+        RUSTDOCFLAGS: "--cfg docsrs"
+    - name: --docsrs
+      uses: actions-rs/cargo@v1
+      with:
+        command: doc
+        args: "--verbose"
+      env:
+        RUSTFLAGS: "--cfg docsrs"
+        RUSTDOCFLAGS: "--cfg docsrs"
+    - name: build --release
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: "--verbose --release"
