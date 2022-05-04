@@ -1,5 +1,9 @@
 #![deny(warnings)]
+#![doc(test(attr(deny(warnings))))]
+#![doc(test(attr(allow(dead_code))))]
+#![doc(test(attr(allow(unused_variables))))]
 #![allow(clippy::never_loop)]
+
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
@@ -36,6 +40,10 @@ impl ReadCharError {
 
 impl Error for ReadCharError {
     fn source(&self) -> Option<&(dyn Error + 'static)> { Some(&self.io_error) }
+}
+
+impl From<ReadCharError> for io::Error {
+    fn from(e: ReadCharError) -> io::Error { e.into_io_error() }
 }
 
 impl fmt::Display for ReadCharError {

@@ -1,6 +1,8 @@
 [package]
+edition = "2021"
 name = "utf8-chars"
-version = "1.0.2"
+version = "2.0.0"
+rust-version = "1.59"
 authors = ["warlock <internalmike@gmail.com>"]
 description = "Char-per-char iterator and `read_char` method for `BufRead`."
 readme = "README.md"
@@ -9,10 +11,6 @@ keywords = ["utf-8", "utf8", "chars", "iterator", "read_char"]
 categories = ["encoding"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/A1-Triard/utf8-chars"
-
-[package.metadata.docs.rs]
-rustc-args = ["--cfg", "docsrs"]
-rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 arrayvec = "0.5.1"

@@ -1,10 +1,12 @@
-name: Rust
+name: CI
 
 on:
   push:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  schedule:
+  - cron: '0 0 * * *'
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,14 +17,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust: [stable, beta, nightly]
+        rust: ["1.59", stable, beta, nightly]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ matrix.rust }}
         override: true
+    - uses: actions/checkout@v2
     - name: build
       uses: actions-rs/cargo@v1
       with:
@@ -43,24 +45,20 @@ jobs:
       with:
         command: doc
         args: "--verbose"
-    - name: test --docsrs
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: "--verbose --doc"
-      env:
-        RUSTFLAGS: "--cfg docsrs"
-        RUSTDOCFLAGS: "--cfg docsrs"
-    - name: --docsrs
-      uses: actions-rs/cargo@v1
-      with:
-        command: doc
-        args: "--verbose"
-      env:
-        RUSTFLAGS: "--cfg docsrs"
-        RUSTDOCFLAGS: "--cfg docsrs"
     - name: build --release
       uses: actions-rs/cargo@v1
       with:
         command: build
         args: "--verbose --release"
+    - name: outdated
+      uses: actions-rs/cargo@v1
+      with:
+        command: outdated
+        args: "--verbose --aggresssive --root-deps-only --exit-code 1"
+    - name: rustup component add clippy
+      run: "rustup component add clippy"
+    - name: clippy
+      uses: actions-rs/cargo@v1
+      with:
+        command: clippy
+        args: "--verbose"
