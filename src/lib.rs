@@ -25,7 +25,7 @@ use arrayvec::{ArrayVec};
 /// kind if no actual I/O error occurred, but read byte sequence was not recognised as a valid UTF-8.  
 #[derive(Debug)]
 pub struct ReadCharError {
-    bytes: ArrayVec<[u8; SEQUENCE_MAX_LENGTH as usize]>,
+    bytes: ArrayVec<u8, { SEQUENCE_MAX_LENGTH as usize }>,
     io_error: io::Error,
 }
 
@@ -104,7 +104,11 @@ const TAIL_BYTE_PATTERN: u8 = 0x80;
 const TAIL_BYTE_VALUE_BITS: u8 = 6;
 const SEQUENCE_MIN_VALUE: [u32; SEQUENCE_MAX_LENGTH as usize] = [0, 0x80, 0x800, 0x10000];
 
-fn to_utf8(item: u32, expected_tail_bytes_count: u8, actual_tail_bytes_count: u8) -> ArrayVec<[u8; SEQUENCE_MAX_LENGTH as usize]> {
+fn to_utf8(
+    item: u32,
+    expected_tail_bytes_count: u8,
+    actual_tail_bytes_count: u8
+) -> ArrayVec<u8, { SEQUENCE_MAX_LENGTH as usize }> {
     let mut res = ArrayVec::new();
     let lead_byte =
         LEAD_BYTE_PATTERN[expected_tail_bytes_count as usize]
@@ -141,12 +145,14 @@ pub trait BufReadCharsExt : BufRead {
     /// compatible, at the price of losing the UTF-8 context bytes in the error
     /// message.
     ///
-    /// The iterator returned from this function will yield instances of [`io::Result`](std::io::Result)`<char>`.
+    /// The iterator returned from this function will yield instances of
+    /// [`io::Result`](std::io::Result)`<char>`.
     fn chars(&mut self) -> Chars<Self> { Chars(self) }
 
     /// Returns an iterator over the chars of this reader.
     ///
-    /// The iterator returned from this function will yield instances of [`Result`](std::result::Result)`<char, `[`ReadCharError`](ReadCharError)`>`.
+    /// The iterator returned from this function will yield instances of
+    /// [`Result`](std::result::Result)`<char, `[`ReadCharError`](ReadCharError)`>`.
     fn chars_raw(&mut self) -> CharsRaw<Self> { CharsRaw(self) }
 
     /// Reads a char from the underlying reader.
@@ -160,7 +166,8 @@ pub trait BufReadCharsExt : BufRead {
     /// - `Ok(None)` if the stream has reached EOF before any byte was read,
     /// - `Err(err)` if an I/O error occurred, or read byte sequence was not recognised as a valid UTF-8.
     ///
-    /// If this function encounters an error of the kind [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
+    /// If this function encounters an error of the kind
+    /// [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
     /// then the error is ignored and the operation will continue.
     fn read_char(&mut self) -> io::Result<Option<char>> {
         self.read_char_raw().map_err(|x| x.into_io_error())
@@ -173,7 +180,8 @@ pub trait BufReadCharsExt : BufRead {
     /// - `Ok(None)` if the stream has reached EOF before any byte was read,
     /// - `Err(err)` if an I/O error occurred, or read byte sequence was not recognised as a valid UTF-8.
     ///
-    /// If this function encounters an error of the kind [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
+    /// If this function encounters an error of the kind
+    /// [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
     /// then the error is ignored and the operation will continue.
     fn read_char_raw(&mut self) -> Result<Option<char>, ReadCharError> {
         match read_byte_and_ignore_interrupts(self) {
