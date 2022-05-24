@@ -12,7 +12,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  main:
     strategy:
       fail-fast: false
       matrix:
@@ -24,41 +24,12 @@ jobs:
       with:
         toolchain: ${{ matrix.rust }}
         override: true
+    - run: "rustup component add clippy"
     - uses: actions/checkout@v2
-    - name: build
-      uses: actions-rs/cargo@v1
-      with:
-        command: build
-        args: "--verbose"
-    - name: test --tests
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: "--verbose --tests"
-    - name: test --doc
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: "--verbose --doc"
-    - name: doc
-      uses: actions-rs/cargo@v1
-      with:
-        command: doc
-        args: "--verbose"
-    - name: build --release
-      uses: actions-rs/cargo@v1
-      with:
-        command: build
-        args: "--verbose --release"
-    - name: outdated
-      uses: actions-rs/cargo@v1
-      with:
-        command: outdated
-        args: "--verbose --aggresssive --root-deps-only --exit-code 1"
-    - name: rustup component add clippy
-      run: "rustup component add clippy"
-    - name: clippy
-      uses: actions-rs/cargo@v1
-      with:
-        command: clippy
-        args: "--verbose"
+    - run: "cargo build --verbose"
+    - run: "cargo test --verbose --tests"
+    - run: "cargo test --verbose --doc"
+    - run: "cargo doc --verbose"
+    - run: "cargo build --verbose --release"
+    - run: "cargo outdated --verbose --aggresssive --root-deps-only --exit-code 1"
+    - run: "cargo clippy --verbose"
