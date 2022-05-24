@@ -4,6 +4,8 @@
 #![doc(test(attr(allow(unused_variables))))]
 #![allow(clippy::never_loop)]
 
+include!("doc_test_readme.include");
+
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
