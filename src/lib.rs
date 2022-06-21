@@ -4,14 +4,8 @@
 #![doc(test(attr(allow(unused_variables))))]
 #![allow(clippy::never_loop)]
 
-include!("doc_test_readme.include");
-
-#[cfg(test)]
-extern crate quickcheck;
-#[cfg(test)]
-#[macro_use(quickcheck)]
-extern crate quickcheck_macros;
-extern crate arrayvec;
+#[doc=include_str!("../README.md")]
+type _DocTestReadme = ();
 
 use std::{fmt};
 use std::char::{self};
@@ -129,7 +123,7 @@ fn to_utf8(
 fn read_byte_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::Result<Option<u8>> {
     loop {
         match reader.fill_buf() {
-            Ok(buf) => return Ok(buf.get(0).copied()),
+            Ok(buf) => return Ok(buf.first().copied()),
             Err(e) => {
                 if e.kind() != io::ErrorKind::Interrupted {
                     return Err(e)
@@ -250,6 +244,7 @@ impl<T: BufRead + ?Sized> BufReadCharsExt for T { }
 
 #[cfg(test)]
 mod tests {
+    use quickcheck_macros::quickcheck;
     use std::io::{BufRead, BufReader, ErrorKind};
     use std::vec::{Vec};
     use crate::{BufReadCharsExt};
