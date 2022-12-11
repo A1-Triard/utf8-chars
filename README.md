@@ -2,7 +2,7 @@
 
 # utf8-chars
 
-Char-per-char iterator and `read_char` method for `BufRead`.
+Char-by-char iterator and `read_char` method for `BufRead`.
 
 ```rust
 use std::io::stdin;

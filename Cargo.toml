@@ -1,10 +1,10 @@
 [package]
 edition = "2021"
 name = "utf8-chars"
-version = "2.0.2"
+version = "2.0.3"
 rust-version = "1.59"
 authors = ["warlock <internalmike@gmail.com>"]
-description = "Char-per-char iterator and `read_char` method for `BufRead`."
+description = "Char-by-char iterator and `read_char` method for `BufRead`."
 readme = "README.md"
 documentation = "https://docs.rs/utf8-chars/"
 keywords = ["utf-8", "utf8", "chars", "iterator", "read_char"]
