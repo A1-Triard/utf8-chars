@@ -46,7 +46,7 @@ impl fmt::Display for ReadCharError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "invalid UTF-8 byte sequence")?;
         for b in self.as_bytes() {
-            write!(f, " {:02X}", b)?;
+            write!(f, " {b:02X}")?;
         }
         write!(f, " read")?;
         match self.as_io_error().kind() {
