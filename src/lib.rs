@@ -190,14 +190,14 @@ pub trait BufReadCharsExt : BufRead {
             Ok(None) => Ok(None),
             Ok(Some(lead_byte)) => {
                 self.consume(1);
-                let tail_bytes_count = 'r: loop {
-                    for i in 0..SEQUENCE_MAX_LENGTH {
-                        if lead_byte & LEAD_BYTE_MASK[i as usize] == LEAD_BYTE_PATTERN[i as usize] { break 'r i; }
-                    }
+                let leading_ones = lead_byte.leading_ones();
+                if leading_ones == 0 { return Ok(Some(char::from(lead_byte))); }
+                if leading_ones == 1 || leading_ones > 4 {
                     let mut bytes = ArrayVec::new();
                     bytes.push(lead_byte);
                     return Err(ReadCharError { bytes, io_error: io::Error::from(io::ErrorKind::InvalidData) });
-                };
+                }
+                let tail_bytes_count = (leading_ones - 1) as u8;
                 let mut item =
                     ((lead_byte & !LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32)
                     << (TAIL_BYTE_VALUE_BITS * tail_bytes_count)
