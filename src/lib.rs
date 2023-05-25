@@ -1,8 +1,13 @@
+#![cfg_attr(feature="bench", feature(test))]
+
 #![deny(warnings)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code))))]
 #![doc(test(attr(allow(unused_variables))))]
 #![allow(clippy::never_loop)]
+
+#[cfg(all(feature="bench", test))]
+extern crate test;
 
 #[doc=include_str!("../README.md")]
 type _DocTestReadme = ();
@@ -445,5 +450,26 @@ mod tests {
             t.append(&mut c.map_or_else(|e| e.as_bytes().to_vec(), |s| s.to_string().as_bytes().to_vec()))
         );
         b == t
+    }
+}
+
+#[cfg(all(feature="bench", test))]
+mod benchs {
+    use rand::distributions::{Distribution, Uniform};
+    use rand::thread_rng;
+    use std::hint::black_box;
+    use std::io::BufReader;
+    use std::vec::{Vec};
+    use test::Bencher;
+    use crate::{BufReadCharsExt};
+
+    #[bench]
+    fn read_array_bench(b: &mut Bencher) {
+        let mut rng = thread_rng();
+        let mut bytes: Vec<u8> = Uniform::new_inclusive(0u8, 255u8).sample_iter(&mut rng).take(10000).collect();
+        b.iter(move || {
+            black_box(&mut bytes);
+            black_box(BufReader::new(&bytes[..]).chars_raw().last());
+        });
     }
 }
