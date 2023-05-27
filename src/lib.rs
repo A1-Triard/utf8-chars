@@ -4,7 +4,6 @@
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code))))]
 #![doc(test(attr(allow(unused_variables))))]
-#![allow(clippy::never_loop)]
 
 #[cfg(all(feature="bench", test))]
 extern crate test;
