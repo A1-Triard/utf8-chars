@@ -182,7 +182,7 @@ pub trait BufReadCharsExt : BufRead {
                     ((lead_byte & LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32)
                     << (TAIL_BYTE_VALUE_BITS * tail_bytes_count)
                 ;
-                for tail_byte_index in 0 .. tail_bytes_count {
+                for tail_byte_index in (0 .. tail_bytes_count).rev() {
                     match read_byte_and_ignore_interrupts(self) {
                         Err(e) => return Err(ReadCharError { bytes, io_error: e }),
                         Ok(None) => return Err(ReadCharError { bytes, io_error: io::Error::from(io::ErrorKind::UnexpectedEof) }),
@@ -193,7 +193,7 @@ pub trait BufReadCharsExt : BufRead {
                             bytes.push(tail_byte);
                             item |=
                                 ((tail_byte & TAIL_BYTE_MASK) as u32)
-                                << ((tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS)
+                                << (tail_byte_index * TAIL_BYTE_VALUE_BITS)
                             ;
                             self.consume(1);
                         }
