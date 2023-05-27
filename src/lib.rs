@@ -11,7 +11,7 @@ extern crate test;
 #[doc=include_str!("../README.md")]
 type _DocTestReadme = ();
 
-use std::{fmt};
+use std::fmt::{self};
 use std::char::{self};
 use std::error::{Error};
 use std::io::{self, BufRead};
