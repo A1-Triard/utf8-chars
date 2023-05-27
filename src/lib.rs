@@ -98,31 +98,10 @@ impl<'a, T: BufRead + ?Sized> Iterator for CharsRaw<'a, T> {
 
 const SEQUENCE_MAX_LENGTH: u8 = 4;
 const LEAD_BYTE_MASK: [u8; SEQUENCE_MAX_LENGTH as usize] = [0x7F, 0x1F, 0x0F, 0x07];
-const LEAD_BYTE_SIGNATURE: [u8; SEQUENCE_MAX_LENGTH as usize] = [0x00, 0xC0, 0xE0, 0xF0];
 const TAIL_BYTE_MASK: u8 = 0x3F;
 const TAIL_BYTE_SIGNATURE: u8 = 0x80;
 const TAIL_BYTE_VALUE_BITS: u8 = 6;
 const SEQUENCE_MIN_VALUE: [u32; SEQUENCE_MAX_LENGTH as usize] = [0, 0x80, 0x800, 0x10000];
-
-fn to_utf8(
-    item: u32,
-    expected_tail_bytes_count: u8,
-    actual_tail_bytes_count: u8
-) -> ArrayVec<u8, { SEQUENCE_MAX_LENGTH as usize }> {
-    let mut res = ArrayVec::new();
-    let lead_byte =
-        LEAD_BYTE_SIGNATURE[expected_tail_bytes_count as usize]
-        | ((item >> (TAIL_BYTE_VALUE_BITS * expected_tail_bytes_count)) as u8)
-    ;
-    res.push(lead_byte);
-    for tail_byte_index in 0 .. actual_tail_bytes_count {
-        res.push(
-            TAIL_BYTE_SIGNATURE
-            | ((item >> ((expected_tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS)) as u8) & !TAIL_BYTE_MASK
-        );
-    }
-    res
-}
 
 fn read_byte_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::Result<Option<u8>> {
     loop {
@@ -196,6 +175,8 @@ pub trait BufReadCharsExt : BufRead {
                     bytes.push(lead_byte);
                     return Err(ReadCharError { bytes, io_error: io::Error::from(io::ErrorKind::InvalidData) });
                 }
+                let mut bytes = ArrayVec::new();
+                bytes.push(lead_byte);
                 let tail_bytes_count = (leading_ones - 1) as u8;
                 let mut item =
                     ((lead_byte & LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32)
@@ -203,21 +184,13 @@ pub trait BufReadCharsExt : BufRead {
                 ;
                 for tail_byte_index in 0 .. tail_bytes_count {
                     match read_byte_and_ignore_interrupts(self) {
-                        Err(e) => return Err(ReadCharError {
-                            bytes: to_utf8(item, tail_bytes_count, tail_byte_index),
-                            io_error: e
-                        }),
-                        Ok(None) => return Err(ReadCharError {
-                            bytes: to_utf8(item, tail_bytes_count, tail_byte_index),
-                            io_error: io::Error::from(io::ErrorKind::UnexpectedEof)
-                        }),
+                        Err(e) => return Err(ReadCharError { bytes, io_error: e }),
+                        Ok(None) => return Err(ReadCharError { bytes, io_error: io::Error::from(io::ErrorKind::UnexpectedEof) }),
                         Ok(Some(tail_byte)) => {
                             if tail_byte & !TAIL_BYTE_MASK != TAIL_BYTE_SIGNATURE {
-                                return Err(ReadCharError {
-                                    bytes: to_utf8(item, tail_bytes_count, tail_byte_index),
-                                    io_error: io::Error::from(io::ErrorKind::InvalidData)
-                                });
+                                return Err(ReadCharError { bytes, io_error: io::Error::from(io::ErrorKind::InvalidData) });
                             }
+                            bytes.push(tail_byte);
                             item |=
                                 ((tail_byte & TAIL_BYTE_MASK) as u32)
                                 << ((tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS)
@@ -227,16 +200,10 @@ pub trait BufReadCharsExt : BufRead {
                     }
                 }
                 if item < SEQUENCE_MIN_VALUE[tail_bytes_count as usize] {
-                    return Err(ReadCharError {
-                        bytes: to_utf8(item, tail_bytes_count, tail_bytes_count),
-                        io_error: io::Error::from(io::ErrorKind::InvalidData)
-                    });
+                    return Err(ReadCharError { bytes, io_error: io::Error::from(io::ErrorKind::InvalidData) });
                 }
                 match char::from_u32(item) {
-                    None => Err(ReadCharError {
-                        bytes: to_utf8(item, tail_bytes_count, tail_bytes_count),
-                        io_error: io::Error::from(io::ErrorKind::InvalidData)
-                    }),
+                    None => Err(ReadCharError { bytes, io_error: io::Error::from(io::ErrorKind::InvalidData) }),
                     Some(item) => Ok(Some(item))
                 }
             }
