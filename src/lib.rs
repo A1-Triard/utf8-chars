@@ -116,7 +116,7 @@ fn to_utf8(
         | ((item >> (TAIL_BYTE_VALUE_BITS * expected_tail_bytes_count)) as u8)
     ;
     res.push(lead_byte);
-    for tail_byte_index in 0..actual_tail_bytes_count {
+    for tail_byte_index in 0 .. actual_tail_bytes_count {
         res.push(
             TAIL_BYTE_PATTERN
             | ((item >> ((expected_tail_bytes_count - 1 - tail_byte_index) * TAIL_BYTE_VALUE_BITS)) as u8) & !TAIL_BYTE_MASK
@@ -202,7 +202,7 @@ pub trait BufReadCharsExt : BufRead {
                     ((lead_byte & !LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32)
                     << (TAIL_BYTE_VALUE_BITS * tail_bytes_count)
                 ;
-                for tail_byte_index in 0..tail_bytes_count {
+                for tail_byte_index in 0 .. tail_bytes_count {
                     match read_byte_and_ignore_interrupts(self) {
                         Err(e) => return Err(ReadCharError {
                             bytes: to_utf8(item, tail_bytes_count, tail_byte_index),
