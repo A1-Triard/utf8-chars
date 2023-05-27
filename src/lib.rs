@@ -25,7 +25,7 @@ use arrayvec::{ArrayVec};
 /// kind if no actual I/O error occurred, but read byte sequence was not recognised as a valid UTF-8.  
 #[derive(Debug)]
 pub struct ReadCharError {
-    bytes: ArrayVec<u8, { SEQUENCE_MAX_LENGTH as usize }>,
+    bytes: ArrayVec<u8, { CHAR_MAX_LEN as usize }>,
     io_error: io::Error,
 }
 
@@ -96,12 +96,12 @@ impl<'a, T: BufRead + ?Sized> Iterator for CharsRaw<'a, T> {
     }
 }
 
-const SEQUENCE_MAX_LENGTH: u8 = 4;
-const LEAD_BYTE_MASK: [u8; SEQUENCE_MAX_LENGTH as usize] = [0x7F, 0x1F, 0x0F, 0x07];
+const CHAR_MAX_LEN: u8 = 4;
+const LEAD_BYTE_MASK: [u8; CHAR_MAX_LEN as usize] = [0x7F, 0x1F, 0x0F, 0x07];
 const TAIL_BYTE_MASK: u8 = 0x3F;
 const TAIL_BYTE_SIGNATURE: u8 = 0x80;
-const TAIL_BYTE_VALUE_BITS: u8 = 6;
-const SEQUENCE_MIN_VALUE: [u32; SEQUENCE_MAX_LENGTH as usize] = [0, 0x80, 0x800, 0x10000];
+const TAIL_BYTE_BITS_COUNT: u8 = 6;
+const CHAR_MIN_VALUE: [u32; CHAR_MAX_LEN as usize] = [0, 0x80, 0x800, 0x10000];
 
 fn read_byte_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::Result<Option<u8>> {
     loop {
@@ -180,7 +180,7 @@ pub trait BufReadCharsExt : BufRead {
                 let tail_bytes_count = (leading_ones - 1) as u8;
                 let mut item =
                     ((lead_byte & LEAD_BYTE_MASK[tail_bytes_count as usize]) as u32)
-                    << (TAIL_BYTE_VALUE_BITS * tail_bytes_count)
+                    << (TAIL_BYTE_BITS_COUNT * tail_bytes_count)
                 ;
                 for tail_byte_index in (0 .. tail_bytes_count).rev() {
                     match read_byte_and_ignore_interrupts(self) {
@@ -193,13 +193,13 @@ pub trait BufReadCharsExt : BufRead {
                             bytes.push(tail_byte);
                             item |=
                                 ((tail_byte & TAIL_BYTE_MASK) as u32)
-                                << (tail_byte_index * TAIL_BYTE_VALUE_BITS)
+                                << (tail_byte_index * TAIL_BYTE_BITS_COUNT)
                             ;
                             self.consume(1);
                         }
                     }
                 }
-                if item < SEQUENCE_MIN_VALUE[tail_bytes_count as usize] {
+                if item < CHAR_MIN_VALUE[tail_bytes_count as usize] {
                     return Err(ReadCharError { bytes, io_error: io::Error::from(io::ErrorKind::InvalidData) });
                 }
                 match char::from_u32(item) {
