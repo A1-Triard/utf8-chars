@@ -20,10 +20,6 @@ jobs:
         rust: ["1.70", stable, beta, nightly]
     runs-on: ${{ matrix.os }}
     steps:
-    - run: 'Echo "[net]" > $env:USERPROFILE/.cargo'
-      if: ${{ matrix.os }} == 'windows-latest'
-    - run: 'Echo "git-fetch-with-cli = true" >> $env:USERPROFILE/.cargo'
-      if: ${{ matrix.os }} == 'windows-latest'
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ matrix.rust }}
