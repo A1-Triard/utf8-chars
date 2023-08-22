@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name = "utf8-chars"
-version = "3.0.0"
+version = "3.0.1"
 rust-version = "1.70"
 authors = ["warlock <internalmike@gmail.com>"]
 description = "Char-by-char iterator and `read_char` method for `BufRead`."

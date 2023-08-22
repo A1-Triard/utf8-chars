@@ -17,7 +17,7 @@ use std::error::{Error};
 use std::io::{self, BufRead};
 use arrayvec::{ArrayVec};
 
-/// A structure, containing read bytes, and an [`io::Error`](std::io::Error).
+/// A structure, containing read bytes, and an [`io::Error`].
 /// The `io::Error` is an actual I/O error if some occurred,
 /// or a synthetic error with either the [`UnexpectedEof`](std::io::ErrorKind::UnexpectedEof)
 /// kind if a multi-byte char was unexpectedly terminated,
@@ -62,14 +62,14 @@ impl fmt::Display for ReadCharError {
     }
 }
 
-/// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
-/// In contrast to [`CharsRaw`](CharsRaw), the error type is
-/// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
+/// An iterator over the chars of an instance of [`BufRead`].
+/// In contrast to [`CharsRaw`], the error type is
+/// [`io::Error`], and therefore more likely to be drop-in
 /// compatible, at the price of losing the UTF-8 context bytes in the error
 /// message.
 ///
 /// This struct is generally created by calling
-/// [`chars`](BufReadCharsExt::chars) on a [`BufRead`](std::io::BufRead).
+/// [`chars`](BufReadCharsExt::chars) on a [`BufRead`].
 #[derive(Debug)]
 pub struct Chars<'a, T: BufRead + ?Sized>(&'a mut T);
 
@@ -81,10 +81,10 @@ impl<'a, T: BufRead + ?Sized> Iterator for Chars<'a, T> {
     }
 }
 
-/// An iterator over the chars of an instance of [`BufRead`](std::io::BufRead).
+/// An iterator over the chars of an instance of [`BufRead`].
 ///
 /// This struct is generally created by calling [`chars_raw`](BufReadCharsExt::chars_raw)
-/// on a [`BufRead`](std::io::BufRead).
+/// on a [`BufRead`].
 #[derive(Debug)]
 pub struct CharsRaw<'a, T: BufRead + ?Sized>(&'a mut T);
 
@@ -116,27 +116,27 @@ fn read_byte_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::
     };
 }
 
-/// Extends [`BufRead`](std::io::BufRead) with methods for reading chars.
+/// Extends [`BufRead`] with methods for reading chars.
 pub trait BufReadCharsExt : BufRead {
     /// Returns an iterator over the chars of this reader.
     /// In contrast to [`chars_raw`](BufReadCharsExt::chars_raw), the error type is
-    /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
+    /// [`io::Error`], and therefore more likely to be drop-in
     /// compatible, at the price of losing the UTF-8 context bytes in the error
     /// message.
     ///
     /// The iterator returned from this function will yield instances of
-    /// [`io::Result`](std::io::Result)`<char>`.
+    /// [`io::Result`]`<char>`.
     fn chars(&mut self) -> Chars<Self> { Chars(self) }
 
     /// Returns an iterator over the chars of this reader.
     ///
     /// The iterator returned from this function will yield instances of
-    /// [`Result`](std::result::Result)`<char, `[`ReadCharError`](ReadCharError)`>`.
+    /// [`Result`]`<char, `[`ReadCharError`]`>`.
     fn chars_raw(&mut self) -> CharsRaw<Self> { CharsRaw(self) }
 
     /// Reads a char from the underlying reader.
     /// In contrast to [`read_char_raw`](BufReadCharsExt::read_char_raw), the error type is
-    /// [`io::Error`](std::io::Error), and therefore more likely to be drop-in
+    /// [`io::Error`], and therefore more likely to be drop-in
     /// compatible, at the price of losing the UTF-8 context bytes in the error
     /// message.
     ///
@@ -146,7 +146,7 @@ pub trait BufReadCharsExt : BufRead {
     /// - `Err(err)` if an I/O error occurred, or read byte sequence was not recognised as a valid UTF-8.
     ///
     /// If this function encounters an error of the kind
-    /// [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
+    /// [`io::ErrorKind::Interrupted`]
     /// then the error is ignored and the operation will continue.
     fn read_char(&mut self) -> io::Result<Option<char>> {
         self.read_char_raw().map_err(|x| x.into_io_error())
@@ -160,7 +160,7 @@ pub trait BufReadCharsExt : BufRead {
     /// - `Err(err)` if an I/O error occurred, or read byte sequence was not recognised as a valid UTF-8.
     ///
     /// If this function encounters an error of the kind
-    /// [`io::ErrorKind::Interrupted`](std::io::ErrorKind::Interrupted)
+    /// [`io::ErrorKind::Interrupted`]
     /// then the error is ignored and the operation will continue.
     fn read_char_raw(&mut self) -> Result<Option<char>, ReadCharError> {
         match read_byte_and_ignore_interrupts(self) {
