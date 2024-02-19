@@ -217,7 +217,6 @@ impl<T: BufRead + ?Sized> BufReadCharsExt for T { }
 mod tests {
     use quickcheck_macros::quickcheck;
     use std::io::{BufRead, BufReader, ErrorKind};
-    use std::vec::{Vec};
     use crate::{BufReadCharsExt};
 
     #[test]
