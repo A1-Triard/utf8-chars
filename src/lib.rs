@@ -19,6 +19,7 @@ use std::io::{self, BufRead};
 use arrayvec::{ArrayVec};
 
 /// A structure, containing read bytes, and an [`io::Error`].
+///
 /// The `io::Error` is an actual I/O error if some occurred,
 /// or a synthetic error with either the [`UnexpectedEof`](std::io::ErrorKind::UnexpectedEof)
 /// kind if a multi-byte char was unexpectedly terminated,
@@ -64,6 +65,7 @@ impl fmt::Display for ReadCharError {
 }
 
 /// An iterator over the chars of an instance of [`BufRead`].
+///
 /// In contrast to [`CharsRaw`], the error type is
 /// [`io::Error`], and therefore more likely to be drop-in
 /// compatible, at the price of losing the UTF-8 context bytes in the error
@@ -120,6 +122,7 @@ fn read_byte_and_ignore_interrupts(reader: &mut (impl BufRead + ?Sized)) -> io::
 /// Extends [`BufRead`] with methods for reading chars.
 pub trait BufReadCharsExt : BufRead {
     /// Returns an iterator over the chars of this reader.
+    ///
     /// In contrast to [`chars_raw`](BufReadCharsExt::chars_raw), the error type is
     /// [`io::Error`], and therefore more likely to be drop-in
     /// compatible, at the price of losing the UTF-8 context bytes in the error
@@ -136,6 +139,7 @@ pub trait BufReadCharsExt : BufRead {
     fn chars_raw(&mut self) -> CharsRaw<Self> { CharsRaw(self) }
 
     /// Reads a char from the underlying reader.
+    ///
     /// In contrast to [`read_char_raw`](BufReadCharsExt::read_char_raw), the error type is
     /// [`io::Error`], and therefore more likely to be drop-in
     /// compatible, at the price of losing the UTF-8 context bytes in the error
