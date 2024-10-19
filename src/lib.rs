@@ -2,6 +2,7 @@
 
 #![deny(warnings)]
 #![allow(clippy::needless_doctest_main)]
+#![allow(clippy::needless_lifetimes)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code))))]
 #![doc(test(attr(allow(unused_variables))))]
