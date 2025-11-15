@@ -131,13 +131,13 @@ pub trait BufReadCharsExt : BufRead {
     ///
     /// The iterator returned from this function will yield instances of
     /// [`io::Result`]`<char>`.
-    fn chars(&mut self) -> Chars<Self> { Chars(self) }
+    fn chars(&mut self) -> Chars<'_, Self> { Chars(self) }
 
     /// Returns an iterator over the chars of this reader.
     ///
     /// The iterator returned from this function will yield instances of
     /// [`Result`]`<char, `[`ReadCharError`]`>`.
-    fn chars_raw(&mut self) -> CharsRaw<Self> { CharsRaw(self) }
+    fn chars_raw(&mut self) -> CharsRaw<'_, Self> { CharsRaw(self) }
 
     /// Reads a char from the underlying reader.
     ///
