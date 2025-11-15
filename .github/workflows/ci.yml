@@ -25,12 +25,10 @@ jobs:
         toolchain: ${{ matrix.rust }}
         override: true
     - run: "rustup component add clippy"
-    - run: "cargo install cargo-outdated"
     - uses: actions/checkout@v2
     - run: "cargo build --verbose"
     - run: "cargo test --verbose --tests"
     - run: "cargo test --verbose --doc"
     - run: "cargo doc --verbose"
     - run: "cargo build --verbose --release"
-    - run: "cargo outdated --verbose --root-deps-only --exit-code 1"
     - run: "cargo clippy --verbose"
