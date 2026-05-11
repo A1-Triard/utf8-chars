@@ -426,8 +426,7 @@ mod tests {
 
 #[cfg(all(feature="bench", test))]
 mod benchs {
-    use rand::distributions::{Distribution, Uniform};
-    use rand::thread_rng;
+    use rand::distr::{Distribution, Uniform};
     use std::hint::black_box;
     use std::io::BufReader;
     use std::vec::{Vec};
@@ -436,8 +435,12 @@ mod benchs {
 
     #[bench]
     fn read_array_bench(b: &mut Bencher) {
-        let mut rng = thread_rng();
-        let mut bytes: Vec<u8> = Uniform::new_inclusive(0u8, 255u8).sample_iter(&mut rng).take(10000).collect();
+        let mut rng = rand::rng();
+        let mut bytes: Vec<u8> = Uniform::new_inclusive(0u8, 255u8)
+            .unwrap()
+            .sample_iter(&mut rng)
+            .take(10000)
+            .collect();
         b.iter(move || {
             black_box(&mut bytes);
             black_box(BufReader::new(&bytes[..]).chars_raw().last());
